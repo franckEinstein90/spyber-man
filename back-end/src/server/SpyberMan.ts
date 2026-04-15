@@ -1,10 +1,28 @@
-import express, { Request, Response } from 'express';
-import bodyParser from 'body-parser';
-import { createServer } from 'http';
-import { Server as SocketIOServer, Socket } from 'socket.io';
-import { engine } from 'express-handlebars';
-import path from 'path';
+import { NextFunction, Request, Response } from 'express';
+import { Socket } from 'socket.io';
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 import { processEvents } from './processEvents';
+import { initServerStack } from './initServerStack';
+import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
+
+const ajv = new Ajv({ allErrors: true, strict: false });
+addFormats(ajv);
+const validateCrawlRequest = ajv.compile(crawlRequestSchema);
+
+function validateProcessEventsRequest(req: Request, res: Response, next: NextFunction): void {
+  const isValid = validateCrawlRequest(req.body);
+
+  if (!isValid) {
+    res.status(400).json({
+      error: 'Invalid request body',
+      details: validateCrawlRequest.errors,
+    });
+    return;
+  }
+
+  next();
+}
 
 export interface ScrapperStatus {
   running: boolean;
@@ -14,28 +32,7 @@ export interface ScrapperStatus {
 const ROOT = process.cwd();
 
 export function startSpyberMan(port: number = 3000): void {
-  const app = express();
-  const httpServer = createServer(app);
-  const io = new SocketIOServer(httpServer);
-
-  // ─── View engine ────────────────────────────────────────────────────────────
-  app.engine(
-    'hbs',
-    engine({
-      extname: '.hbs',
-      defaultLayout: 'main',
-      layoutsDir: path.join(ROOT, 'views', 'layouts'),
-      partialsDir: path.join(ROOT, 'views', 'partials'),
-    })
-  );
-  app.set('view engine', 'hbs');
-  app.set('views', path.join(ROOT, 'views'));
-
-  // ─── Middleware ──────────────────────────────────────────────────────────────
-  app.use(bodyParser.json());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-  app.use(express.static(path.join(ROOT, 'public')));
+  const { app, httpServer, io } = initServerStack(ROOT);
 
   const scrapperStatus: ScrapperStatus = {
     running: false,
@@ -50,15 +47,10 @@ export function startSpyberMan(port: number = 3000): void {
 
   // Initiate a crawl via REST
   app.post('/api/process-events', 
-    //validateProcessEventsRequest(crawlRequestSchema),
+    validateProcessEventsRequest,
     async (req: Request, res: Response): Promise<void> => {
 
-    const data = req.body;
-    //const processOptions = validateProcessEventsRequest(crawlRequestSchema)(data);
-    /*if (!processOptions) {
-      res.status(400).json({ error: 'Invalid request body' });
-      return;
-    }*/
+    const data = req.body as CrawlRequestBody;
     //serverReporter.clearMessages();
     //serverReporter.report(`Processing load with options: ${JSON.stringify(processOptions)}`);
     if (scrapperStatus.running) {
