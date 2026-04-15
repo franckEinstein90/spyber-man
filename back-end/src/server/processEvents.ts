@@ -1,9 +1,6 @@
 import { ScrapperStatus } from "./SpyberMan";
 import { CrawlResult, Crawler } from "../crawler/Crawler";
-
-export interface CrawlRequestBody {
-    urls: string[];
-}
+import { CrawlRequestBody } from "./models/crawlRequest";
 
 export interface ProcessEventsOptions {
     urls: string[];

@@ -9,6 +9,11 @@ st.title("🕷️ Cyber Crawler")
 # Configuration
 API_BASE_URL = "http://localhost:3000"
 
+SAMPLE_URLS = {
+    "Python": ["https://www.python.org"],
+    "Docs + News": ["https://docs.python.org/3/", "https://news.ycombinator.com"],
+}
+
 # Initialize session state
 if "last_response" not in st.session_state:
     st.session_state.last_response = None
@@ -22,11 +27,21 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("📝 Input URLs")
+    sample_col1, sample_col2 = st.columns(2)
+
+    with sample_col1:
+        if st.button("Use Python URL", use_container_width=True):
+            st.session_state.urls_input = "\n".join(SAMPLE_URLS["Python"])
+
+    with sample_col2:
+        if st.button("Use 2 Real URLs", use_container_width=True):
+            st.session_state.urls_input = "\n".join(SAMPLE_URLS["Docs + News"])
+
     urls_text = st.text_area(
         "Enter URLs (one per line)",
-        value=st.session_state.urls_input,
+        key="urls_input",
         height=150,
-        placeholder="https://example.com\nhttps://example.org"
+        placeholder="https://www.python.org\nhttps://news.ycombinator.com"
     )
 
 with col2:
@@ -101,14 +116,14 @@ with st.expander("📖 Usage Guide"):
     4. Click "Send to API" to submit the crawl request
     
     ### API Endpoint
-    - **URL**: `POST http://localhost:8000/api/crawl`
+    - **URL**: `POST http://localhost:3000/api/process-events`
     - **Content-Type**: `application/json`
     - **Example Request**:
       ```json
       {
         "urls": [
-          "https://example.com",
-          "https://example.org"
+                    "https://www.python.org",
+                    "https://news.ycombinator.com"
         ]
       }
       ```
