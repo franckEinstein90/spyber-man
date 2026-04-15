@@ -60,7 +60,7 @@ export function startSpyberMan(port: number = 3000): void {
     scrapperStatus.running = true;
 
     processEvents({
-        urls: data.urls,
+      payload: data,
 //        processOptions, 
 //        crawlOptions,
         scrapperStatus
