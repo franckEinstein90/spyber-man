@@ -1,0 +1,6 @@
+{
+  "watch": ["main.ts", "src"],
+  "ext": "ts,json,hbs",
+  "ignore": ["dist/**", "node_modules/**"],
+  "exec": "ts-node --project tsconfig.json main.ts"
+}

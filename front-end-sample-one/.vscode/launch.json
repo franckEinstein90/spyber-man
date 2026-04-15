@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Streamlit App",
+      "type": "python",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "app.py"],
+      "jinja": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "FastAPI Server",
+      "type": "python",
+      "request": "launch",
+      "module": "api",
+      "jinja": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: Debug",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

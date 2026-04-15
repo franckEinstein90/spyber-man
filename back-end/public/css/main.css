@@ -1,0 +1,61 @@
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  padding: 2rem;
+}
+
+/* ── Dashboard layout ────────────────────────────────────────────────────── */
+.dashboard { max-width: 900px; margin: 0 auto; }
+
+header h1 { font-size: 1.75rem; margin-bottom: 2rem; color: #58a6ff; }
+
+section { margin-bottom: 2rem; }
+section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #8b949e; }
+
+/* ── Crawl form ───────────────────────────────────────────────────────────── */
+#crawl-form { display: flex; gap: 0.5rem; }
+
+#crawl-url {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  color: #c9d1d9;
+  font-size: 0.95rem;
+}
+
+#crawl-form button {
+  padding: 0.5rem 1.25rem;
+  background: #238636;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+#crawl-form button:hover { background: #2ea043; }
+
+/* ── Log panel ───────────────────────────────────────────────────────────── */
+#log-list {
+  list-style: none;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+#log-list li { padding: 0.25rem 0; border-bottom: 1px solid #21262d; }
+#log-list li:last-child { border-bottom: none; }
+#log-list li.event-start  { color: #58a6ff; }
+#log-list li.event-done   { color: #3fb950; }
+#log-list li.event-error  { color: #f85149; }
