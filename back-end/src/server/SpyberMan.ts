@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { engine } from 'express-handlebars';
 import path from 'path';
-import { processEvents } from './processEvents';
+import { CrawlRequestBody, processEvents } from './processEvents';
 
 export interface ScrapperStatus {
   running: boolean;
@@ -53,7 +53,7 @@ export function startSpyberMan(port: number = 3000): void {
     //validateProcessEventsRequest(crawlRequestSchema),
     async (req: Request, res: Response): Promise<void> => {
 
-    const data = req.body;
+    const data = req.body as CrawlRequestBody;
     //const processOptions = validateProcessEventsRequest(crawlRequestSchema)(data);
     /*if (!processOptions) {
       res.status(400).json({ error: 'Invalid request body' });
@@ -68,6 +68,7 @@ export function startSpyberMan(port: number = 3000): void {
     scrapperStatus.running = true;
 
     processEvents({
+        urls: data.urls,
 //        processOptions, 
 //        crawlOptions,
         scrapperStatus
