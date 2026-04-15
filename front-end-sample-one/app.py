@@ -1,13 +1,12 @@
 import streamlit as st
 import requests
-from models import CrawlRequest
-import json
 
 st.set_page_config(page_title="Cyber Crawler", layout="wide")
 st.title("🕷️ Cyber Crawler")
 
 # Configuration
 API_BASE_URL = "http://localhost:3000"
+CALLBACK_URL = "http://localhost:8000/api/crawl-results"
 
 SAMPLE_URLS = {
     "Python": ["https://www.python.org"],
@@ -46,6 +45,7 @@ with col1:
 
 with col2:
     st.subheader("⚙️ Controls")
+    st.caption(f"Callback endpoint: {CALLBACK_URL}")
     
     # Parse URLs from text
     urls_list = [url.strip() for url in urls_text.split("\n") if url.strip()]
@@ -57,7 +57,12 @@ with col2:
         else:
             try:
                 # Prepare request
-                payload = {"urls": urls_list}
+                payload = {
+                    "urls": [
+                        {"url": url, "callbackUrl": CALLBACK_URL}
+                        for url in urls_list
+                    ]
+                }
                 
                 # Send POST request
                 with st.spinner("Sending request..."):
@@ -117,13 +122,20 @@ with st.expander("📖 Usage Guide"):
     
     ### API Endpoint
     - **URL**: `POST http://localhost:3000/api/process-events`
+        - **Callback Receiver**: `POST http://localhost:8000/api/crawl-results`
     - **Content-Type**: `application/json`
     - **Example Request**:
       ```json
       {
         "urls": [
-                    "https://www.python.org",
-                    "https://news.ycombinator.com"
+                    {
+                        "url": "https://www.python.org",
+                        "callbackUrl": "http://localhost:8000/api/crawl-results"
+                    },
+                    {
+                        "url": "https://news.ycombinator.com",
+                        "callbackUrl": "http://localhost:8000/api/crawl-results"
+                    }
         ]
       }
       ```

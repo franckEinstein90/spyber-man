@@ -1,11 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
-
-export interface CrawlResult {
-  url: string;
-  html: string;
-  title: string;
-  timestamp: Date;
-}
+import { CrawlResult } from './models/CrawlResult';
 
 export class Crawler {
   private browser: Browser | null = null;

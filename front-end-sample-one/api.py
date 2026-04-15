@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from models import CrawlRequest
+from models import CrawlCallbackPayload, CrawlRequest
 import logging
+from datetime import datetime
 
 app = FastAPI(title="Cyber Crawler API")
+
+received_crawl_results = []
 
 # Enable CORS for local development
 app.add_middleware(
@@ -31,7 +34,8 @@ async def process_events(request: CrawlRequest):
     ```
     """
     try:
-        urls = [str(url) for url in request.urls]
+        urls = [str(item.url) for item in request.urls]
+        callback_urls = [str(item.callbackUrl) for item in request.urls]
         logger.info(f"Received process request for {len(urls)} URL(s): {urls}")
         
         # TODO: Implement actual event processing logic here
@@ -39,11 +43,34 @@ async def process_events(request: CrawlRequest):
             "status": "received",
             "count": len(urls),
             "urls": urls,
+            "callbackUrls": callback_urls,
             "message": "Events received successfully. Processing logic to be implemented."
         }
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/crawl-results")
+async def receive_crawl_result(payload: CrawlCallbackPayload):
+    """Receive crawl results pushed by the Node/Express backend callback."""
+    event = payload.model_dump()
+    received_crawl_results.append(event)
+    logger.info("Received crawl callback for %s", event.get("result", {}).get("url"))
+    return {
+        "status": "accepted",
+        "receivedAt": datetime.utcnow().isoformat(),
+        "totalResults": len(received_crawl_results)
+    }
+
+
+@app.get("/api/crawl-results")
+async def list_crawl_results():
+    """List callback results received so far for quick local testing."""
+    return {
+        "count": len(received_crawl_results),
+        "items": received_crawl_results,
+    }
 
 
 @app.get("/health")
