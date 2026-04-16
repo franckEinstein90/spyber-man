@@ -4,6 +4,7 @@ import { createServer, Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { engine } from 'express-handlebars';
 import path from 'path';
+import { applyBasicSecurityHeaders } from './security';
 
 export interface ServerStack {
   app: express.Express;
@@ -15,6 +16,8 @@ export function initServerStack(root: string): ServerStack {
   const app = express();
   const httpServer = createServer(app);
   const io = new SocketIOServer(httpServer);
+
+  app.use(applyBasicSecurityHeaders);
 
   // Configure view engine.
   app.engine(
