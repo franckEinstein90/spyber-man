@@ -13,6 +13,10 @@ dist/
 *.log
 logs/
 
+# Runtime artifacts
+data/
+screenGrabs/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,7 +1,7 @@
-import { ScrapperStatus } from './SpyberMan';
 import { Crawler } from '../crawler/Crawler';
 import { CrawlResult } from '../crawler/models/CrawlResult';
 import { CrawlRequestBody } from './models/crawlRequest';
+import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { recordLinkVisit } from './database';
 import http from 'http';
 import https from 'https';
@@ -47,7 +47,7 @@ function postJson(url: string, payload: unknown): Promise<void> {
 
 export interface ProcessEventsOptions {
   payload: CrawlRequestBody;
-  scrapperStatus: ScrapperStatus;
+  scrapperStatus: SpyberManCrawlStatus;
 }
 
 export const processEvents = async (options: ProcessEventsOptions): Promise<CrawlResult[]> => {
