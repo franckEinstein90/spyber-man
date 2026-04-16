@@ -1,139 +1,73 @@
-# Cyber Crawler Frontend
+# Cyber Crawler Frontend Sample
 
-A Streamlit web application with FastAPI backend for submitting URLs to crawl via API.
+This folder contains a local integration sample with:
 
-## Project Structure
+1. **Streamlit UI** (`app.py`) to submit crawl requests to the Node backend.
+2. **FastAPI service** (`api.py`) to receive crawl callbacks and expose callback history.
 
-```
-.
-├── app.py                 # Streamlit frontend UI
-├── api.py                 # FastAPI backend server
-├── models.py              # Pydantic models for request validation
-├── pyproject.toml         # uv project configuration
-├── .vscode/
-│   └── launch.json        # VS Code debugging configuration
-└── README.md
-```
+## Components
 
-## Setup
+- `app.py` — Streamlit user interface.
+- `api.py` — FastAPI callback receiver + utility endpoints.
+- `models.py` — Pydantic request/response models.
+- `Makefile` / `run.sh` — helper commands for local execution.
 
-### 1. Install Dependencies
+## Local setup
 
-Using `uv` (recommended):
+### Install dependencies
 
 ```bash
 uv sync
 ```
 
-Or with pip:
+Alternative:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Running the Application
+### Run services
 
-There are two components to run:
-
-#### Option A: Run both with VS Code debugger
-
-1. Open the project in VS Code
-2. Go to the "Run and Debug" panel (Ctrl+Shift+D)
-3. Select "FastAPI Server" and click run
-4. In another debug session, select "Streamlit App" and click run
-
-#### Option B: Run from terminal
-
-**Terminal 1 - Start the API server:**
+Terminal 1:
 
 ```bash
 uv run python api.py
 ```
 
-**Terminal 2 - Start Streamlit app:**
+Terminal 2:
 
 ```bash
 uv run streamlit run app.py
 ```
 
-The Streamlit app will open at `http://localhost:8501`
+## Endpoint map (FastAPI app)
 
-## API Endpoint
+- `POST /api/process-events`
+  - Local sample endpoint returning accepted payload summary.
+  - Mainly useful for standalone FastAPI testing.
 
-### POST /api/process-events
+- `POST /api/crawl-results`
+  - Callback receiver used by Node backend.
+  - Stores callback events in memory.
 
-Submit URLs to process.
+- `GET /api/crawl-results`
+  - Returns all callback events received during current process lifetime.
 
-**Request:**
+- `GET /health`
+  - Health check endpoint.
 
-```json
-{
-  "urls": [
-    "https://example.com",
-    "https://example.org"
-  ]
-}
-```
+## Typical integration flow
 
-**Response:**
+1. Start Node backend (`../back-end`) on port `3000`.
+2. Start this FastAPI service on port `8000`.
+3. Start Streamlit app on port `8501`.
+4. Submit URLs from Streamlit.
+5. Observe immediate response in Streamlit + callback records via `GET /api/crawl-results`.
 
-```json
-{
-  "status": "received",
-  "count": 2,
-  "urls": ["https://example.com", "https://example.org"],
-  "message": "Events received successfully. Processing logic to be implemented."
-}
-```
+## Notes / limitations
 
-## Testing the API
+- Callback event storage is in memory only (cleared on restart).
+- CORS is open for local development.
+- This is a development sample, not hardened production deployment code.
 
-### Using curl:
-
-```bash
-curl -X POST http://localhost:8000/api/process-events \
-  -H "Content-Type: application/json" \
-  -d '{"urls": ["https://example.com", "https://example.org"]}'
-```
-
-### Using the Streamlit frontend:
-
-1. Enter URLs in the text area (one per line)
-2. Click "Send to API"
-3. View the response in the response panel
-
-## Technologies
-
-- **Streamlit** - Web UI framework
-- **FastAPI** - Modern API framework
-- **Pydantic** - Data validation using Python type hints
-- **uv** - Fast Python package manager
-- **Uvicorn** - ASGI web server
-
-## Development
-
-### Add more features
-
-The `api.py` file contains the POST `/api/process-events` endpoint with a TODO comment. Implement your event processing logic there.
-
-### Testing POST requests
-
-Use the Streamlit UI or curl to test the API during development.
-
-## Configuration Files
-
-### pyproject.toml
-
-```toml
-[tool.uv]
-package = false  # This is a script-only project, not a package
-```
-
-This configuration prevents issues with editable installs for script-only projects.
-
-### .vscode/launch.json
-
-Provides three debug configurations:
-- **Streamlit App** - Debug the Streamlit frontend
-- **FastAPI Server** - Debug the API server
-- **Python: Debug** - Generic Python debugger
+For deeper repository documentation, see `../documentation/`.
