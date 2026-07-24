@@ -17,6 +17,8 @@ export function successResult(url: string): CrawlResult {
     title: `Title ${url}`,
     timestamp: new Date(),
     status: 'success',
+    screenshotUrl: `http://localhost:3000/screenGrabs/fake-${encodeURIComponent(url)}.png`,
+    ocrText: `OCR text for ${url}`,
   };
 }
 
@@ -29,6 +31,8 @@ export function errorResult(url: string, message = 'boom'): CrawlResult {
     timestamp: new Date(),
     status: 'error',
     error: message,
+    screenshotUrl: null,
+    ocrText: null,
   };
 }
 
@@ -52,7 +56,7 @@ export interface FakeCrawler extends CrawlerLike {
 export function makeFakeCrawler(options: FakeCrawlerOptions = {}): FakeCrawler {
   const resultFor = options.resultFor ?? successResult;
 
-  const crawl = vi.fn(async (url: string): Promise<CrawlResult> => {
+  const crawl = vi.fn(async (url: string, _hooks?: unknown): Promise<CrawlResult> => {
     await options.onCrawlStart?.(url);
     if (options.throwFor?.(url)) {
       throw new Error(`crawl failed for ${url}`);

@@ -21,6 +21,8 @@ describe('database', () => {
       visitedAt: '2026-01-01T00:00:00.000Z',
       callbackStatus: 'success',
       callbackError: null,
+      screenshotUrl: 'http://localhost:3000/screenGrabs/a.com-1.png',
+      ocrText: 'Hello from OCR',
     });
     await recordLinkVisit({
       url: 'https://b.com',
@@ -28,6 +30,8 @@ describe('database', () => {
       visitedAt: '2026-01-01T00:00:01.000Z',
       callbackStatus: 'failed',
       callbackError: 'Callback failed (500): boom',
+      screenshotUrl: null,
+      ocrText: null,
     });
 
     const rows = getAllLinkVisits();
@@ -37,11 +41,15 @@ describe('database', () => {
       callback_url: 'https://a.com/cb',
       callback_status: 'success',
       callback_error: null,
+      screenshot_url: 'http://localhost:3000/screenGrabs/a.com-1.png',
+      ocr_text: 'Hello from OCR',
     });
     expect(rows[1]).toMatchObject({
       url: 'https://b.com',
       callback_status: 'failed',
       callback_error: 'Callback failed (500): boom',
+      screenshot_url: null,
+      ocr_text: null,
     });
   });
 
@@ -53,6 +61,8 @@ describe('database', () => {
       visitedAt: '2026-01-01T00:00:00.000Z',
       callbackStatus: 'success',
       callbackError: null,
+      screenshotUrl: null,
+      ocrText: null,
     });
 
     // Re-initializing opens a fresh in-memory DB (previous data gone).

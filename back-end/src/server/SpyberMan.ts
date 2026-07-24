@@ -3,6 +3,8 @@ import { Socket } from 'socket.io';
 import { Logger } from 'winston';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import path from 'path';
+import fs from 'fs';
 import { processEvents } from './processEvents';
 import { initServerStack } from './initServerStack';
 import { initDatabase } from './database';
@@ -10,6 +12,11 @@ import { createRateLimiter } from './security';
 import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { ComputeEnv } from '../compute/models';
+import {
+  getScreenshotDirectory,
+  isSafeScreenshotFilename,
+  SCREENSHOT_ROUTE_PREFIX,
+} from './screenshotPaths';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -72,6 +79,26 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
       crawlRunning: scrapperStatus.running,
       currentUrls: scrapperStatus.current_urls,
     });
+  });
+
+  // Serve crawl screenshots written under screenGrabs/.
+  // Example: GET /screenGrabs/example.com-1710000000000.png
+  app.get(`${SCREENSHOT_ROUTE_PREFIX}/:filename`, (req: Request, res: Response) => {
+    const filename = req.params.filename;
+    if (!isSafeScreenshotFilename(filename)) {
+      res.status(400).json({ error: 'Invalid screenshot filename' });
+      return;
+    }
+
+    const filePath = path.join(getScreenshotDirectory(ROOT), filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Screenshot not found' });
+      return;
+    }
+
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.type('png');
+    res.sendFile(filePath);
   });
 
   // Broadcast a snapshot of the current crawl status to all connected clients.

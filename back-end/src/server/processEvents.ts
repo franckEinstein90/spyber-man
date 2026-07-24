@@ -1,5 +1,9 @@
 import { Crawler } from '../crawler/Crawler';
 import { CrawlResult } from '../crawler/models/CrawlResult';
+import {
+  CRAWL_STAGE_LABELS,
+  type CrawlStage,
+} from '../crawler/crawlStages';
 import { CrawlRequestBody } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { recordLinkVisit } from './database';
@@ -14,7 +18,10 @@ export interface ProcessEventsLogger {
 
 /** The subset of {@link Crawler} that `processEvents` needs; eases testing. */
 export interface CrawlerLike {
-  crawl(url: string): Promise<CrawlResult>;
+  crawl(
+    url: string,
+    hooks?: { onStage?: (stage: CrawlStage) => void },
+  ): Promise<CrawlResult>;
   close(): Promise<void>;
 }
 
@@ -25,6 +32,13 @@ export interface CrawlerLike {
 export type CrawlActivityEvent =
   | { type: 'batch:start'; total: number; timestamp: string }
   | { type: 'url:start'; url: string; index: number; total: number; timestamp: string }
+  | {
+      type: 'url:stage';
+      url: string;
+      stage: CrawlStage;
+      label: string;
+      timestamp: string;
+    }
   | {
       type: 'url:done';
       url: string;
@@ -148,7 +162,17 @@ export const processEvents = async (
     try {
       let crawlResult: CrawlResult;
       try {
-        crawlResult = await crawler.crawl(target.url);
+        crawlResult = await crawler.crawl(target.url, {
+          onStage: (stage) => {
+            onEvent({
+              type: 'url:stage',
+              url: target.url,
+              stage,
+              label: CRAWL_STAGE_LABELS[stage],
+              timestamp: now(),
+            });
+          },
+        });
       } catch (error) {
         crawlResult = {
           url: target.url,
@@ -157,6 +181,8 @@ export const processEvents = async (
           timestamp: new Date(),
           status: 'error',
           error: error instanceof Error ? error.message : String(error),
+          screenshotUrl: null,
+          ocrText: null,
         };
       }
       results[index] = crawlResult;
@@ -189,6 +215,8 @@ export const processEvents = async (
         visitedAt,
         callbackStatus,
         callbackError,
+        screenshotUrl: crawlResult.screenshotUrl ?? null,
+        ocrText: crawlResult.ocrText ?? null,
       });
 
       onEvent({

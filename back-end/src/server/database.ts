@@ -8,6 +8,10 @@ export interface LinkVisitRecord {
   visitedAt: string;
   callbackStatus: 'success' | 'failed';
   callbackError: string | null;
+  /** Public screenshot URL when a grab was produced; otherwise null. */
+  screenshotUrl: string | null;
+  /** OCR text extracted from the screenshot; otherwise null. */
+  ocrText: string | null;
 }
 
 /** A `link_visits` row as stored in SQLite (snake_case columns). */
@@ -18,6 +22,8 @@ export interface StoredLinkVisit {
   visited_at: string;
   callback_status: 'success' | 'failed';
   callback_error: string | null;
+  screenshot_url: string | null;
+  ocr_text: string | null;
 }
 
 const DB_DIRECTORY = path.join(process.cwd(), 'data');
@@ -33,6 +39,21 @@ function getDb(): Database.Database {
   }
 
   return db;
+}
+
+function ensureColumn(name: string, ddl: string): void {
+  const columns = getDb()
+    .prepare(`PRAGMA table_info(link_visits)`)
+    .all() as Array<{ name: string }>;
+  const hasColumn = columns.some((column) => column.name === name);
+  if (!hasColumn) {
+    getDb().exec(ddl);
+  }
+}
+
+function migrateLinkVisitsSchema(): void {
+  ensureColumn('screenshot_url', `ALTER TABLE link_visits ADD COLUMN screenshot_url TEXT`);
+  ensureColumn('ocr_text', `ALTER TABLE link_visits ADD COLUMN ocr_text TEXT`);
 }
 
 /**
@@ -61,9 +82,14 @@ export async function initDatabase(dbPath: string = DEFAULT_DB_PATH): Promise<vo
       callback_url TEXT NOT NULL,
       visited_at TEXT NOT NULL,
       callback_status TEXT NOT NULL,
-      callback_error TEXT
+      callback_error TEXT,
+      screenshot_url TEXT,
+      ocr_text TEXT
     )
   `);
+
+  // Existing databases created before newer columns need a soft migration.
+  migrateLinkVisitsSchema();
 }
 
 /** Insert one link-visit record, reusing a cached prepared statement. */
@@ -75,8 +101,10 @@ export async function recordLinkVisit(record: LinkVisitRecord): Promise<void> {
         callback_url,
         visited_at,
         callback_status,
-        callback_error
-      ) VALUES (?, ?, ?, ?, ?)
+        callback_error,
+        screenshot_url,
+        ocr_text
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
   }
 
@@ -86,6 +114,8 @@ export async function recordLinkVisit(record: LinkVisitRecord): Promise<void> {
     record.visitedAt,
     record.callbackStatus,
     record.callbackError,
+    record.screenshotUrl,
+    record.ocrText,
   );
 }
 
