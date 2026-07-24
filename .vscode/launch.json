@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend",
+      "type": "node",
+      "request": "launch",
+      "runtimeArgs": [
+        "--env-file=${workspaceFolder}/.env",
+        "-r",
+        "ts-node/register"
+      ],
+      "args": ["${workspaceFolder}/back-end/main.ts"],
+      "cwd": "${workspaceFolder}/back-end",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "NODE_ENV": "development",
+        "TS_NODE_PROJECT": "${workspaceFolder}/back-end/tsconfig.json"
+      },
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Front-End",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/front-end",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Spyber Man: Full Stack",
+      "configurations": ["Backend", "Front-End"],
+      "stopAll": true,
+      "presentation": {
+        "group": "spyber",
+        "order": 1
+      }
+    }
+  ]
+}
