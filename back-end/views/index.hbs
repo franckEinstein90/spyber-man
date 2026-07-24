@@ -1,18 +1,28 @@
 <main class="dashboard">
   <header>
     <h1>{{title}}</h1>
+    <p class="subtitle">Read-only live activity monitor</p>
   </header>
 
-  <section class="crawl-form">
-    <h2>New Crawl</h2>
-    <form id="crawl-form">
-      <input type="url" id="crawl-url" placeholder="https://example.com" required />
-      <button type="submit">Crawl</button>
-    </form>
+  <section class="status-panel">
+    <div class="status-indicator">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">Connecting&hellip;</span>
+    </div>
+    <dl class="status-meta">
+      <div>
+        <dt>Progress</dt>
+        <dd id="status-progress">&mdash;</dd>
+      </div>
+      <div>
+        <dt>Currently crawling</dt>
+        <dd id="status-current"><span class="muted">nothing</span></dd>
+      </div>
+    </dl>
   </section>
 
   <section class="log-panel">
-    <h2>Live Log</h2>
+    <h2>Live Activity</h2>
     <ul id="log-list"></ul>
   </section>
 </main>

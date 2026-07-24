@@ -59,11 +59,18 @@ export class Crawler {
       const html = await page.content();
       const title = await page.title();
 
-      return { url, html, title, timestamp: new Date() };
+      return { url, html, title, timestamp: new Date(), status: 'success' };
     }
 
-    catch (_error) {
-      return { url, html: '', title: '', timestamp: new Date() };
+    catch (error) {
+      return {
+        url,
+        html: '',
+        title: '',
+        timestamp: new Date(),
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
     
     finally {

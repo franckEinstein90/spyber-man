@@ -2,40 +2,107 @@
 (function () {
   'use strict';
 
+  const MAX_LOG_ENTRIES = 200;
+
   const socket = io();
   const logList = document.getElementById('log-list');
-  const crawlForm = document.getElementById('crawl-form');
-  const crawlUrl = document.getElementById('crawl-url');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const statusProgress = document.getElementById('status-progress');
+  const statusCurrent = document.getElementById('status-current');
+
+  let progress = { done: 0, total: 0 };
 
   function appendLog(message, cssClass) {
     const li = document.createElement('li');
     li.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     if (cssClass) li.classList.add(cssClass);
     logList.prepend(li);
+    while (logList.childElementCount > MAX_LOG_ENTRIES) {
+      logList.removeChild(logList.lastChild);
+    }
   }
 
-  // ── Socket events ──────────────────────────────────────────────────────────
+  // state: 'idle' | 'busy' | 'error' | 'offline'
+  function setStatus(state, text) {
+    statusDot.className = `dot ${state}`;
+    statusText.textContent = text;
+  }
+
+  function renderCurrent(urls) {
+    statusCurrent.innerHTML = '';
+    if (!urls || urls.length === 0) {
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.textContent = 'nothing';
+      statusCurrent.appendChild(span);
+      return;
+    }
+    urls.forEach((url) => {
+      const chip = document.createElement('span');
+      chip.className = 'url-chip';
+      chip.textContent = url;
+      statusCurrent.appendChild(chip);
+    });
+  }
+
+  // ── Connection state ─────────────────────────────────────────────────────
   socket.on('connect', () => appendLog('Connected to server'));
-  socket.on('disconnect', () => appendLog('Disconnected from server', 'event-error'));
-
-  socket.on('crawl:start', (data) => {
-    appendLog(`Crawl started → ${data.url}`, 'event-start');
+  socket.on('disconnect', () => {
+    setStatus('offline', 'Disconnected');
+    renderCurrent([]);
+    statusProgress.textContent = '\u2014';
+    appendLog('Disconnected from server', 'event-error');
   });
 
-  socket.on('crawl:done', (data) => {
-    appendLog(`Crawl done  → ${data.url} — "${data.title}"`, 'event-done');
+  // ── Status snapshot (sent on connect and on every change) ──────────────────
+  socket.on('crawl:status', (status) => {
+    if (status.running) {
+      setStatus('busy', 'Crawling');
+    } else {
+      setStatus('idle', 'Idle');
+    }
+    renderCurrent(status.currentUrls);
   });
 
-  socket.on('crawl:error', (data) => {
-    appendLog(`Crawl error → ${data.url}: ${data.error}`, 'event-error');
-  });
+  // ── Live activity feed ─────────────────────────────────────────────────────
+  socket.on('crawl:activity', (event) => {
+    switch (event.type) {
+      case 'batch:start':
+        progress = { done: 0, total: event.total };
+        statusProgress.textContent = `0 / ${event.total}`;
+        appendLog(`Batch started \u2014 ${event.total} URL(s)`, 'event-start');
+        break;
 
-  // ── Form submission ────────────────────────────────────────────────────────
-  crawlForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const url = crawlUrl.value.trim();
-    if (!url) return;
-    socket.emit('crawl:request', { url });
-    crawlUrl.value = '';
+      case 'url:start':
+        appendLog(
+          `Crawling \u2192 ${event.url} (${event.index + 1}/${event.total})`,
+          'event-start',
+        );
+        break;
+
+      case 'url:done':
+        progress.done += 1;
+        statusProgress.textContent = `${progress.done} / ${progress.total}`;
+        if (event.status === 'success') {
+          appendLog(
+            `Done \u2192 ${event.url} \u2014 "${event.title}" [callback: ${event.callbackStatus}]`,
+            'event-done',
+          );
+        } else {
+          appendLog(`Error \u2192 ${event.url}: ${event.error}`, 'event-error');
+        }
+        break;
+
+      case 'batch:done':
+        appendLog(
+          `Batch complete \u2014 ${event.succeeded} ok, ${event.failed} failed`,
+          'event-done',
+        );
+        break;
+
+      default:
+        break;
+    }
   });
 })();

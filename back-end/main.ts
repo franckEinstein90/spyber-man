@@ -2,7 +2,10 @@ import winston from 'winston';
 import { SpyberManOptions, startSpyberMan } from './src/server/SpyberMan';
 import { getComputeEnv } from './src/compute/getComputeEnv';
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = parseInt(
+  process.env.PORT || process.env.BACKEND_PORT || '3000',
+  10,
+);
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',

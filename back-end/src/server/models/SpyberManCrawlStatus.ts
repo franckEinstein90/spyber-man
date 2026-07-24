@@ -1,4 +1,5 @@
 export interface SpyberManCrawlStatus {
   running: boolean;
-  current_url: string | null;
+  /** URLs currently being crawled in the active batch (supports concurrency). */
+  current_urls: string[];
 }
