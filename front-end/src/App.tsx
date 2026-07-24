@@ -7,18 +7,37 @@ import {
   checkCallbackHealth,
   listCrawlResults,
   submitCrawl,
+  submitIndividualCrawl,
 } from './api';
 import { ApiStatus } from './components/ApiStatus';
 import { CallbackResults } from './components/CallbackResults';
 import { Controls } from './components/Controls';
+import { CrawlResultPanel } from './components/CrawlResultPanel';
 import { LastResponse } from './components/LastResponse';
 import { UrlInput, SAMPLE_URLS } from './components/UrlInput';
 import { UsageGuide } from './components/UsageGuide';
-import type { CrawlResultsList, ProcessEventsResponse } from './types';
+import type {
+  CrawlCallbackPayload,
+  CrawlResultsList,
+  IndividualOptions,
+  ProcessEventsResponse,
+  SubmitMode,
+} from './types';
 
 export function App() {
-  const [urlsInput, setUrlsInput] = useState('');
+  const [mode, setMode] = useState<SubmitMode>('batch');
+  const [batchUrls, setBatchUrls] = useState('');
+  const [individualUrl, setIndividualUrl] = useState('');
+  const [individualOptions, setIndividualOptions] = useState<IndividualOptions>(
+    {
+      callbackUrl: CALLBACK_URL,
+      waitForResult: true,
+    },
+  );
   const [lastResponse, setLastResponse] = useState<ProcessEventsResponse | null>(
+    null,
+  );
+  const [crawlResult, setCrawlResult] = useState<CrawlCallbackPayload | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
@@ -31,42 +50,97 @@ export function App() {
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [loadingResults, setLoadingResults] = useState(false);
 
-  const urlsList = urlsInput
+  const batchList = batchUrls
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+
+  const trimmedIndividual = individualUrl.trim();
+  const urlCount = mode === 'batch' ? batchList.length : trimmedIndividual ? 1 : 0;
+
+  function handleModeChange(next: SubmitMode) {
+    if (next === mode) return;
+
+    if (next === 'individual') {
+      // Prefer first batch line so typed work isn't lost when switching.
+      const first = batchList[0] ?? '';
+      if (!trimmedIndividual && first) {
+        setIndividualUrl(first);
+      }
+      setCrawlResult(null);
+    } else if (next === 'batch') {
+      if (!batchUrls.trim() && trimmedIndividual) {
+        setBatchUrls(trimmedIndividual);
+      }
+    }
+
+    setMode(next);
+  }
 
   async function handleSend() {
     setError(null);
     setSuccess(null);
 
-    if (urlsList.length === 0) {
-      setError('Please enter at least one URL');
+    if (mode === 'batch') {
+      if (batchList.length === 0) {
+        setError('Please enter at least one URL');
+        return;
+      }
+      setSending(true);
+      setCrawlResult(null);
+      try {
+        const response = await submitCrawl({
+          urls: batchList.map((url) => ({
+            url,
+            callbackUrl: CALLBACK_URL,
+          })),
+        });
+        setLastResponse(response);
+        setSuccess('Request sent successfully');
+      } catch (err) {
+        setError(formatSendError(err));
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    if (!trimmedIndividual) {
+      setError('Please enter a URL');
+      return;
+    }
+    if (!individualOptions.callbackUrl.trim()) {
+      setError('Please set a callback URL in Options');
       return;
     }
 
     setSending(true);
+    setCrawlResult(null);
     try {
-      const response = await submitCrawl({
-        urls: urlsList.map((url) => ({
-          url,
-          callbackUrl: CALLBACK_URL,
-        })),
+      const outcome = await submitIndividualCrawl(trimmedIndividual, {
+        callbackUrl: individualOptions.callbackUrl.trim(),
+        waitForResult: individualOptions.waitForResult,
       });
-      setLastResponse(response);
-      setSuccess('Request sent successfully');
+      setLastResponse(outcome.acceptResponse);
+      setCrawlResult(outcome.crawlResult);
+      setSuccess(
+        outcome.crawlResult
+          ? 'Crawl finished — result displayed below'
+          : 'Crawl request accepted',
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
-        setError(
-          `Cannot connect to API at ${BACKEND_DISPLAY_URL}. Make sure the backend is running.`,
-        );
-      } else {
-        setError(message);
-      }
+      setError(formatSendError(err));
     } finally {
       setSending(false);
     }
+  }
+
+  function formatSendError(err: unknown): string {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+      return `Cannot connect to API at ${BACKEND_DISPLAY_URL}. Make sure the backend is running.`;
+    }
+    return message;
   }
 
   async function handleHealthCheck() {
@@ -102,14 +176,33 @@ export function App() {
 
       <div className="layout">
         <UrlInput
-          value={urlsInput}
-          onChange={setUrlsInput}
-          onUsePython={() => setUrlsInput(SAMPLE_URLS.Python.join('\n'))}
-          onUseDocsNews={() => setUrlsInput(SAMPLE_URLS['Docs + News'].join('\n'))}
+          mode={mode}
+          onModeChange={handleModeChange}
+          batchValue={batchUrls}
+          onBatchChange={setBatchUrls}
+          individualUrl={individualUrl}
+          onIndividualUrlChange={setIndividualUrl}
+          options={individualOptions}
+          onOptionsChange={setIndividualOptions}
+          onUsePython={() => {
+            if (mode === 'batch') {
+              setBatchUrls(SAMPLE_URLS.Python.join('\n'));
+            } else {
+              setIndividualUrl(SAMPLE_URLS.Python[0]);
+            }
+          }}
+          onUseDocsNews={() =>
+            setBatchUrls(SAMPLE_URLS['Docs + News'].join('\n'))
+          }
         />
         <Controls
-          callbackUrl={CALLBACK_URL}
-          urlCount={urlsList.length}
+          callbackUrl={
+            mode === 'individual'
+              ? individualOptions.callbackUrl
+              : CALLBACK_URL
+          }
+          urlCount={urlCount}
+          mode={mode}
           sending={sending}
           error={error}
           success={success}
@@ -118,6 +211,9 @@ export function App() {
       </div>
 
       <LastResponse response={lastResponse} />
+      {mode === 'individual' ? (
+        <CrawlResultPanel result={crawlResult} />
+      ) : null}
 
       <CallbackResults
         results={results}

@@ -7,6 +7,13 @@ export interface CrawlRequest {
   urls: CrawlTarget[];
 }
 
+export type SubmitMode = 'batch' | 'individual';
+
+export interface IndividualOptions {
+  callbackUrl: string;
+  waitForResult: boolean;
+}
+
 export interface ProcessEventsResponse {
   message?: string;
   options?: {
@@ -27,6 +34,10 @@ export interface CrawlCallbackPayload {
     html?: string;
     title?: string;
     timestamp?: string;
+    status?: string;
+    error?: string;
+    screenshotUrl?: string | null;
+    ocrText?: string | null;
     [key: string]: unknown;
   };
   callbackUrl: string;
@@ -40,4 +51,6 @@ export interface CrawlResultsList {
 
 export interface HealthResponse {
   status: string;
+  crawlRunning?: boolean;
+  currentUrls?: string[];
 }

@@ -1,6 +1,9 @@
+import type { SubmitMode } from '../types';
+
 interface ControlsProps {
   callbackUrl: string;
   urlCount: number;
+  mode: SubmitMode;
   sending: boolean;
   error: string | null;
   success: string | null;
@@ -10,11 +13,21 @@ interface ControlsProps {
 export function Controls({
   callbackUrl,
   urlCount,
+  mode,
   sending,
   error,
   success,
   onSend,
 }: ControlsProps) {
+  const sendLabel =
+    mode === 'individual'
+      ? sending
+        ? 'Crawling…'
+        : 'Crawl URL'
+      : sending
+        ? 'Sending…'
+        : 'Send to API';
+
   return (
     <section className="panel">
       <h2>Controls</h2>
@@ -22,7 +35,8 @@ export function Controls({
         Callback endpoint: <code>{callbackUrl}</code>
       </p>
       <p className="url-count">
-        URLs to send: <strong>{urlCount}</strong>
+        URLs to send: <strong>{urlCount}</strong>{' '}
+        <span className="mode-hint">({mode})</span>
       </p>
       <button
         type="button"
@@ -30,7 +44,7 @@ export function Controls({
         onClick={onSend}
         disabled={sending}
       >
-        {sending ? 'Sending…' : 'Send to API'}
+        {sendLabel}
       </button>
       {error ? <p className="msg error" role="alert">{error}</p> : null}
       {success ? <p className="msg success">{success}</p> : null}
