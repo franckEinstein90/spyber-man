@@ -81,6 +81,14 @@
         );
         break;
 
+      case 'url:stage':
+        appendLog(
+          `${event.label} \u2192 ${event.url}`,
+          'event-stage',
+        );
+        setStatus('busy', event.label);
+        break;
+
       case 'url:done':
         progress.done += 1;
         statusProgress.textContent = `${progress.done} / ${progress.total}`;

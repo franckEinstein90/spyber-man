@@ -65,6 +65,8 @@ describe('processEvents', () => {
       url: 'https://a.com',
       callbackStatus: 'success',
       callbackError: null,
+      screenshotUrl: expect.stringContaining('/screenGrabs/'),
+      ocrText: expect.any(String),
     });
 
     // Cleanup: in-flight list emptied, browser closed.
@@ -173,6 +175,7 @@ describe('processEvents', () => {
     expect(events.filter((t) => t === 'url:start')).toHaveLength(2);
     expect(events.filter((t) => t === 'url:done')).toHaveLength(2);
     // With concurrency 1, each url:start is immediately followed by its url:done.
+    // Fake crawler does not emit url:stage events.
     expect(events).toEqual([
       'batch:start',
       'url:start',
@@ -180,6 +183,39 @@ describe('processEvents', () => {
       'url:start',
       'url:done',
       'batch:done',
+    ]);
+  });
+
+  it('forwards crawl stage events from the crawler', async () => {
+    const stages: string[] = [];
+    const crawler = makeFakeCrawler({
+      onCrawlStart: async () => {
+        // no-op; stages come from the real hook path below
+      },
+    });
+    // Override crawl to report stages like the real crawler.
+    crawler.crawl = vi.fn(async (url, hooks) => {
+      hooks?.onStage?.('accessing_page');
+      hooks?.onStage?.('taking_screenshot');
+      hooks?.onStage?.('running_ocr');
+      return successResult(url);
+    });
+
+    await processEvents({
+      payload: payload('https://a.com'),
+      scrapperStatus: makeStatus(),
+      crawler,
+      onEvent: (event) => {
+        if (event.type === 'url:stage') {
+          stages.push(event.stage);
+        }
+      },
+    });
+
+    expect(stages).toEqual([
+      'accessing_page',
+      'taking_screenshot',
+      'running_ocr',
     ]);
   });
 

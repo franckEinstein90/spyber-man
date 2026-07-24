@@ -93,5 +93,6 @@ section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #8b949e; }
 #log-list li { padding: 0.25rem 0; border-bottom: 1px solid #21262d; }
 #log-list li:last-child { border-bottom: none; }
 #log-list li.event-start { color: #58a6ff; }
+#log-list li.event-stage { color: #d29922; }
 #log-list li.event-done  { color: #3fb950; }
 #log-list li.event-error { color: #f85149; }
