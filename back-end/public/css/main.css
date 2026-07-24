@@ -11,35 +11,71 @@ body {
 /* ── Dashboard layout ────────────────────────────────────────────────────── */
 .dashboard { max-width: 900px; margin: 0 auto; }
 
-header h1 { font-size: 1.75rem; margin-bottom: 2rem; color: #58a6ff; }
+header h1 { font-size: 1.75rem; color: #58a6ff; }
+header .subtitle { color: #8b949e; font-size: 0.9rem; margin-bottom: 2rem; }
 
 section { margin-bottom: 2rem; }
 section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #8b949e; }
 
-/* ── Crawl form ───────────────────────────────────────────────────────────── */
-#crawl-form { display: flex; gap: 0.5rem; }
-
-#crawl-url {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
+/* ── Status panel ─────────────────────────────────────────────────────────── */
+.status-panel {
+  background: #161b22;
   border: 1px solid #30363d;
   border-radius: 6px;
-  background: #161b22;
-  color: #c9d1d9;
-  font-size: 0.95rem;
+  padding: 1rem 1.25rem;
 }
 
-#crawl-form button {
-  padding: 0.5rem 1.25rem;
-  background: #238636;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.95rem;
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
 }
 
-#crawl-form button:hover { background: #2ea043; }
+.dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: #6e7681;
+  flex-shrink: 0;
+}
+.dot.idle    { background: #3fb950; }
+.dot.busy    { background: #d29922; animation: pulse 1.2s ease-in-out infinite; }
+.dot.error   { background: #f85149; }
+.dot.offline { background: #6e7681; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(1.35); }
+}
+
+.status-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+.status-meta dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b949e;
+  margin-bottom: 0.3rem;
+}
+.status-meta dd { font-family: monospace; font-size: 0.9rem; }
+.status-meta .muted { color: #6e7681; font-style: italic; }
+
+.url-chip {
+  display: inline-block;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  margin: 0 0.35rem 0.35rem 0;
+  color: #d29922;
+  word-break: break-all;
+}
 
 /* ── Log panel ───────────────────────────────────────────────────────────── */
 #log-list {
@@ -56,6 +92,6 @@ section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #8b949e; }
 
 #log-list li { padding: 0.25rem 0; border-bottom: 1px solid #21262d; }
 #log-list li:last-child { border-bottom: none; }
-#log-list li.event-start  { color: #58a6ff; }
-#log-list li.event-done   { color: #3fb950; }
-#log-list li.event-error  { color: #f85149; }
+#log-list li.event-start { color: #58a6ff; }
+#log-list li.event-done  { color: #3fb950; }
+#log-list li.event-error { color: #f85149; }

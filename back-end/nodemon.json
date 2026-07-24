@@ -2,5 +2,8 @@
   "watch": ["main.ts", "src"],
   "ext": "ts,json,hbs",
   "ignore": ["dist/**", "node_modules/**"],
-  "exec": "ts-node --project tsconfig.json main.ts"
+  "exec": "node --env-file=../.env -r ts-node/register main.ts",
+  "env": {
+    "TS_NODE_PROJECT": "tsconfig.json"
+  }
 }
