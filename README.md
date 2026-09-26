@@ -1,11 +1,13 @@
 # Spyber Man
 
-Spyber Man is a local web crawler you instruct from a chat.
+Spyber Man is a local agent that captures web pages and, when you ask, turns those captures into a knowledge base.
 
-1. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer).
-2. **`data/`** — embedded Postgres with pgvector. SQL migrations live in `data/migrations`.
-3. **`frontend/`** — Vite, React, and shadcn chat. The sidebar shows which services are running.
-4. **`mcp/`** — FastMCP server the chat uses to crawl, parse screenshots, read logs, and start or stop the crawler and the database.
+You work in the chat. A crawl saves the screenshot and the page text and stops there. Parsing is a separate step: Cohere reads the screenshot, and the markdown is split into chunks with embeddings in embedded Postgres. Later questions are answered from those chunks, and follow-ups keep the conversation. The same chat starts and stops the crawler and the database, applies migrations, and reads the logs.
+
+1. **`frontend/`** — Vite, React, and shadcn chat. This is where you instruct the agent. The sidebar shows which services are running.
+2. **`mcp/`** — FastMCP tools the chat calls to crawl, parse, read logs, and start or stop the crawler and the database.
+3. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer). It captures pages. It does not parse them unless asked.
+4. **`data/`** — embedded Postgres with pgvector. Visits, parsed chunks (`rag`), and `app_logs` are created from `data/migrations`.
 
 ## Documentation
 
@@ -40,7 +42,7 @@ npm run dev
 | Web crawler | http://localhost:3000 |
 | Embedded Postgres | `127.0.0.1:5432` |
 
-In the chat you can ask whether the web crawler or the database is running, tell it to start or stop either one, and apply pending migrations. Send one or more `http`/`https` URLs to crawl. Screenshots and page text come back in the thread. Parsing is separate: say `parse the screenshot` to send the latest image to Cohere and store the markdown as embedded chunks. Say `show the logs` to read `app_logs`.
+Ask whether the crawler or the database is running, or tell the agent to start or stop either one and to apply pending migrations. Send one or more `http`/`https` URLs to capture a page. The screenshot and page text come back in the thread. Say `parse the screenshot` when you want that image turned into markdown and stored as embedded chunks. Say `show the logs` to read `app_logs`.
 
 `COHERE_API_KEY` is required to parse. `OPENAI_API_KEY` is required for those embeddings and for text summaries. Both belong in the repo-root `.env`. See `.env.example`.
 

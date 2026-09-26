@@ -10,8 +10,25 @@ export interface StoredCrawl {
 
 export type ToolState = "running" | "done" | "error"
 
+export interface PixelCrop {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface ChatAttachment {
+  name: string
+  mediaType: string
+  size: number
+  text?: string
+  truncated?: boolean
+  imageUrl?: string
+}
+
 export type MessagePart =
   | { type: "text"; text: string }
+  | { type: "attachments"; items: ChatAttachment[] }
   | { type: "tool"; name: string; detail: string; state: ToolState }
   | { type: "captures"; items: StoredCrawl[] }
 
@@ -157,7 +174,7 @@ function describeMigrations(result: Record<string, unknown>, appliedNow = false)
 function asksForLogs(text: string): boolean {
   return /\b(logs?|observability)\b/i.test(text)
     || /\b(what went wrong|recent errors|show errors)\b/i.test(text)
-    || /\bwhy did\b/i.test(text)
+    || (/\bwhy did\b/i.test(text) && /\b(fail|failed|error|timeout|timed out|crash|parse|crawl)\b/i.test(text))
 }
 
 function explainToolFailure(error: unknown): string {
@@ -232,9 +249,96 @@ function summarizeCaptures(items: StoredCrawl[]): string {
     .join(" ")
 }
 
+export interface ConversationTurn {
+  role: "user" | "assistant"
+  text: string
+}
+
+export async function parseStoredScreenshot(
+  publish: (parts: MessagePart[]) => void,
+  options: { url?: string; crop?: PixelCrop; screenshotFile?: string | null } = {},
+): Promise<void> {
+  const parts: MessagePart[] = []
+  const show = () => publish(structuredClone(parts))
+  const addText = (text: string) => {
+    parts.push({ type: "text", text })
+    show()
+  }
+  const runTool = async (name: string, detail: string, args: Record<string, unknown>) => {
+    parts.push({ type: "tool", name, detail, state: "running" })
+    const index = parts.length - 1
+    show()
+    try {
+      const result = await callMcp(name, args)
+      const tool = parts[index]
+      if (tool?.type === "tool") tool.state = "done"
+      show()
+      return result
+    } catch (error) {
+      const tool = parts[index]
+      if (tool?.type === "tool") tool.state = "error"
+      show()
+      throw error
+    }
+  }
+
+  try {
+    const health = asRecord(await runTool("get_crawler_status", "backend process", {}))
+    if (health.running !== true) {
+      addText("The web crawler is stopped, so I'll start it first.")
+      const startedService = asRecord(await runTool("start_crawler", "backend process", {}))
+      if (startedService.running !== true) {
+        addText(errorText(startedService.error ?? startedService))
+        return
+      }
+    }
+
+    const crop = options.crop
+    const detail = crop
+      ? `${Math.round(crop.width)} × ${Math.round(crop.height)} px`
+      : options.url ?? "latest screenshot"
+    addText(crop ? `I'll parse the selected region of ${options.url ?? "the latest screenshot"}.` : "I'll parse the latest screenshot.")
+    const args: Record<string, unknown> = {}
+    if (options.url) args.url = options.url
+    if (crop) {
+      args.crop_x = Math.round(crop.x)
+      args.crop_y = Math.round(crop.y)
+      args.crop_width = Math.round(crop.width)
+      args.crop_height = Math.round(crop.height)
+    }
+    if (options.screenshotFile) args.screenshot_file = options.screenshotFile
+    const result = asRecord(await runTool("parse_screenshot", detail, args))
+    if (typeof result.error === "string") {
+      addText(result.error)
+      return
+    }
+    const item = asStoredCrawl(result)
+    if (!item) {
+      addText("Parse finished without a screenshot to show.")
+      return
+    }
+    addText("The parsed page is below, next to the screenshot.")
+    parts.push({ type: "captures", items: [item] })
+    show()
+    const count = typeof result.ragChunks === "number" ? result.ragChunks : 0
+    if (typeof result.ragError === "string" && result.ragError) {
+      addText(result.ragError)
+    } else if (count > 0) {
+      addText(`Stored ${count} chunk${count === 1 ? "" : "s"} from ${item.url} with embeddings.`)
+    }
+  } catch (error) {
+    for (const part of parts) {
+      if (part.type === "tool" && part.state === "running") part.state = "error"
+    }
+    addText(explainToolFailure(error))
+  }
+}
+
 export async function instructAgent(
   instruction: string,
   publish: (parts: MessagePart[]) => void,
+  history: ConversationTurn[] = [],
+  attachmentText = "",
 ): Promise<void> {
   const parts: MessagePart[] = []
   const show = () => publish(structuredClone(parts))
@@ -427,17 +531,6 @@ export async function instructAgent(
       return
     }
 
-    if (urls.length === 0 && wantsSummary) {
-      addText("I'll ask the MCP server to summarize that text.")
-      const result = asRecord(await runTool("summarize_text", "supplied text", { text: instruction }))
-      if (typeof result.error === "string") {
-        addText(result.error)
-        return
-      }
-      addText(typeof result.summary === "string" ? result.summary : "The summary tool returned no text.")
-      return
-    }
-
     if (wantsParse && !wantsCrawl) {
       addText(
         urls.length === 1
@@ -450,9 +543,27 @@ export async function instructAgent(
     }
 
     if (urls.length === 0) {
-      addText(
-        "I can start or stop the web crawler and the database, check whether migrations are pending, and apply them. I can crawl a page and show the screenshot, then parse that screenshot if you ask. For example: crawl https://example.com.",
+      addText("I'll look through the stored pages.")
+      if (!(await ensureCrawler())) return
+      const result = asRecord(
+        await runTool("ask_knowledge", "stored pages", {
+          question: instruction,
+          history_json: JSON.stringify(history.slice(-6)),
+          attachment_text: attachmentText,
+        }),
       )
+      if (typeof result.error === "string") {
+        addText(result.error)
+        return
+      }
+      const answer = typeof result.answer === "string" ? result.answer : "I could not answer from the stored pages."
+      addText(answer)
+      const sources = Array.isArray(result.sources)
+        ? result.sources.filter((item): item is string => typeof item === "string")
+        : []
+      if (sources.length > 0) {
+        addText(`From ${sources.join(", ")}`)
+      }
       return
     }
 

@@ -12,6 +12,7 @@ import { createRateLimiter } from './security';
 import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { ComputeEnv } from '../compute/models';
+import { answerFromKnowledge, type ConversationTurn } from './ask';
 import { parseRequestedScreenshot } from './parseRequest';
 import { listCrawlResults } from './resultsStore';
 import {
@@ -152,6 +153,35 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
     validateProcessEventsRequest,
     initiateCrawl,
   );
+
+  app.post('/api/ask', (req: Request, res: Response) => {
+    const body = req.body as { question?: unknown; history?: unknown; attachmentText?: unknown } | undefined;
+    if (!body || typeof body.question !== 'string' || !body.question.trim()) {
+      res.status(400).json({ error: 'question is required' });
+      return;
+    }
+    const history = Array.isArray(body.history)
+      ? body.history.flatMap((turn): ConversationTurn[] => {
+          if (!turn || typeof turn !== 'object') return [];
+          const record = turn as { role?: unknown; text?: unknown };
+          if ((record.role !== 'user' && record.role !== 'assistant') || typeof record.text !== 'string') {
+            return [];
+          }
+          return [{ role: record.role, text: record.text }];
+        })
+      : [];
+
+    const attachmentText = typeof body.attachmentText === 'string' ? body.attachmentText : '';
+    answerFromKnowledge(body.question, history, attachmentText)
+      .then((result) => {
+        res.json(result);
+      })
+      .catch((error: unknown) => {
+        res.status(502).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  });
 
   app.get('/api/logs', (req: Request, res: Response) => {
     const rawLimit = Number.parseInt(String(req.query.limit ?? '50'), 10);

@@ -34,6 +34,7 @@ The chat and the default MCP callback both use the crawler's results endpoint on
 - `start_crawl` submits up to 25 HTTP(S) URLs.
 - `get_crawl_results` returns recent titles, excerpts, and screenshot file names.
 - `parse_screenshot` sends the newest stored screenshot to Cohere Parse. Pass a URL to parse that page's screenshot. It needs `COHERE_API_KEY`. The chat waits up to 9 minutes for this call.
+- `ask_knowledge` answers a question from parsed chunks in `rag.chunks`. It uses recent chat turns so a follow-up stays on the same topic, and it does not add facts from outside those chunks.
 - `get_app_logs` returns recent rows from `app_logs`.
 - `summarize_text` summarizes text with OpenAI. It needs `OPENAI_API_KEY`.
 

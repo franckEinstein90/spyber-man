@@ -30,3 +30,4 @@ Open http://localhost:5173.
 - `Parse the latest screenshot.`
 - `Are any database migrations pending?`
 - `Show the logs.`
+- `What do the stored pages say about peat?`

@@ -221,6 +221,41 @@ export async function replaceRagChunks(
   }
 }
 
+export interface SimilarChunk {
+  url: string;
+  chunkIndex: number;
+  content: string;
+  distance: number;
+}
+
+export async function ragChunkCount(): Promise<number> {
+  const result = await getPool().query<{ count: string }>('SELECT COUNT(*)::text AS count FROM rag.chunks');
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+/** Nearest parsed chunks by cosine distance. Lower distance is closer. */
+export async function searchRagChunks(embedding: number[], limit = 6): Promise<SimilarChunk[]> {
+  const capped = Math.min(Math.max(limit, 1), 20);
+  const result = await getPool().query<{
+    url: string;
+    chunk_index: number;
+    content: string;
+    distance: number | string;
+  }>(
+    `SELECT url, chunk_index, content, (embedding <=> $1::vector) AS distance
+     FROM rag.chunks
+     ORDER BY embedding <=> $1::vector
+     LIMIT $2`,
+    [`[${embedding.join(',')}]`, capped],
+  );
+  return result.rows.map((row) => ({
+    url: row.url,
+    chunkIndex: row.chunk_index,
+    content: row.content,
+    distance: Number(row.distance),
+  }));
+}
+
 export async function listRagChunks(
   linkVisitId: number,
 ): Promise<Array<{ chunk_index: number; content: string; dimensions: number }>> {
@@ -232,6 +267,48 @@ export async function listRagChunks(
     [linkVisitId],
   );
   return result.rows;
+}
+
+/** Every visit that stored a screenshot, newest first. */
+export async function listVisitScreenshots(): Promise<
+  Array<{ url: string; screenshotUrl: string; visitedAt: string }>
+> {
+  const result = await getPool().query<{ url: string; screenshot_url: string; visited_at: Date | string }>(
+    `SELECT url, screenshot_url, visited_at
+     FROM link_visits
+     WHERE screenshot_url IS NOT NULL
+     ORDER BY visited_at DESC`,
+  );
+  return result.rows.map((row) => ({
+    url: row.url,
+    screenshotUrl: row.screenshot_url,
+    visitedAt: new Date(row.visited_at).toISOString(),
+  }));
+}
+
+/** Drop the screenshot URL on every visit that points at this file. The visit itself stays. */
+export async function clearScreenshotReference(filename: string): Promise<number> {
+  const result = await getPool().query(
+    `UPDATE link_visits
+     SET screenshot_url = NULL
+     WHERE screenshot_url IS NOT NULL
+       AND right(screenshot_url, char_length($1) + 1) = '/' || $1`,
+    [filename],
+  );
+  return result.rowCount ?? 0;
+}
+
+/** Visit whose screenshot URL ends with this file name. */
+export async function visitForScreenshotFile(filename: string): Promise<{ url: string } | null> {
+  const result = await getPool().query<{ url: string }>(
+    `SELECT url FROM link_visits
+     WHERE screenshot_url IS NOT NULL
+       AND right(screenshot_url, char_length($1) + 1) = '/' || $1
+     ORDER BY id DESC
+     LIMIT 1`,
+    [filename],
+  );
+  return result.rows[0] ?? null;
 }
 
 /** Newest visit that stored a screenshot, optionally limited to one URL. */

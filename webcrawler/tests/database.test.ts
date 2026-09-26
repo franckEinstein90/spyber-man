@@ -11,6 +11,7 @@ import {
   recordLinkVisit,
   replaceRagChunks,
   saveParsedMarkdown,
+  searchRagChunks,
 } from '../src/server/database';
 
 let embedded: EmbeddedPostgres | undefined;
@@ -93,6 +94,16 @@ describe('database', () => {
     ]);
     const chunks = await listRagChunks(visitId!);
     expect(chunks).toEqual([{ chunk_index: 0, content: 'Replaced chunk', dimensions: 1536 }]);
+
+    const near = Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0));
+    const far = Array.from({ length: 1536 }, (_, index) => (index === 1 ? 1 : 0));
+    await replaceRagChunks(visitId!, 'https://a.com', [
+      { index: 0, content: 'Near chunk', embedding: near },
+      { index: 1, content: 'Far chunk', embedding: far },
+    ]);
+    const nearest = await searchRagChunks(near, 1);
+    expect(nearest[0]).toMatchObject({ url: 'https://a.com', content: 'Near chunk', chunkIndex: 0 });
+    expect(nearest[0].distance).toBeLessThan(0.01);
 
     await recordAppLog({
       level: 'error',

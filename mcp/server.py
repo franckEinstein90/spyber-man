@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -183,6 +184,46 @@ async def get_app_logs(limit: int = 20, level: str | None = None) -> dict:
             detail = payload.get("error") if isinstance(payload, dict) else payload
             return {"error": detail or f"Logs failed ({response.status_code})"}
         return payload if isinstance(payload, dict) else {"error": "Logs returned an unexpected response"}
+    except httpx.HTTPError as exc:
+        return {"error": str(exc), "backend_url": BACKEND_URL}
+
+
+@mcp.tool
+async def ask_knowledge(question: str, history_json: str = "", attachment_text: str = "") -> dict:
+    """Answer a question from parsed page chunks, including any attached file text."""
+    if not question.strip():
+        raise ValueError("question must not be empty")
+    history: list[dict[str, str]] = []
+    if history_json.strip():
+        parsed = json.loads(history_json)
+        if not isinstance(parsed, list):
+            raise ValueError("history_json must be a JSON array")
+        for turn in parsed[-6:]:
+            if not isinstance(turn, dict):
+                continue
+            role = turn.get("role")
+            text = turn.get("text")
+            if role in {"user", "assistant"} and isinstance(text, str) and text.strip():
+                history.append({"role": role, "text": text[:8000]})
+
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                f"{BACKEND_URL}/api/ask",
+                json={
+                    "question": question,
+                    "history": history,
+                    "attachmentText": attachment_text[:24000],
+                },
+            )
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {"error": response.text}
+        if response.status_code >= 400:
+            detail = payload.get("error") if isinstance(payload, dict) else payload
+            return {"error": detail or f"Ask failed ({response.status_code})"}
+        return payload if isinstance(payload, dict) else {"error": "Ask returned an unexpected response"}
     except httpx.HTTPError as exc:
         return {"error": str(exc), "backend_url": BACKEND_URL}
 

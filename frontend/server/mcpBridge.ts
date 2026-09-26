@@ -106,7 +106,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<boolea
         return true
       }
       // Cohere Parse plus embeddings can run for several minutes.
-      const timeout = body.name === "parse_screenshot" ? 540_000 : 60_000
+      // ask_knowledge accepts attachment_text. parse_screenshot accepts a crop and screenshot_file.
+      const timeout = body.name === "parse_screenshot" ? 540_000 : body.name === "ask_knowledge" ? 90_000 : 60_000
       const result = (await client.callTool(
         {
           name: body.name,

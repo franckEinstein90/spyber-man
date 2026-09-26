@@ -113,15 +113,19 @@ Accepts a crawler callback and returns `{"status":"accepted"}`. The chat points 
 
 Parses a screenshot that a crawl already saved. The body may be `{}` to use the newest screenshot, or `{ "url": "https://example.com" }` to use that page's newest screenshot. Cohere Parse (`parse-v5.0`) runs only for this request, and only when `COHERE_API_KEY` is set. The markdown is stored on the visit. That text is then split into chunks, embedded with OpenAI `text-embedding-ada-002`, and written to `rag.chunks`. The response includes `ragChunks` and `ragError`.
 
-## 6) `GET /api/logs`
+## 6) `POST /api/ask`
+
+Body: `{ "question": "...", "history": [{ "role": "user", "text": "..." }] }`. Embeds the question with `text-embedding-ada-002`, retrieves the nearest `rag.chunks`, and answers with `gpt-4o-mini` using only those passages. Returns `{ "answer", "sources" }`.
+
+## 7) `GET /api/logs`
 
 Returns recent rows from `app_logs`, newest first. Query `limit` (1–200, default 50) and optional `level` (`debug`, `info`, `warn`, `error`). Parse and callback failures are written here.
 
-## 7) `GET /screengrabs/<file>`
+## 8) `GET /screengrabs/<file>`
 
 Serves a PNG written under `screenGrabs/`. The chat loads these through the Vite proxy.
 
-## 8) Socket.IO Events
+## 9) Socket.IO Events
 
 Current surface:
 
