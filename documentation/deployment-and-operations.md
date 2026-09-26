@@ -49,21 +49,11 @@ uv run server.py
 
 `start_crawler` and `stop_crawler` control the `webcrawler` process. See `documentation/mcp-server.md`.
 
-## Frontend Sample Local Run
-
-```bash
-cd front-end-sample-one
-uv sync
-uv run python api.py
-# in second terminal
-uv run streamlit run app.py
-```
-
 ## Networking Expectations
 
-- Streamlit client must reach backend at `http://localhost:3000`.
-- Backend must reach callback endpoint (default `http://localhost:8000/api/crawl-results`).
-- Callback URL must be reachable from backend host (important in container/cloud deployments).
+- The chat reaches the crawler at `http://localhost:3000`.
+- Crawl callbacks default to `http://localhost:3000/api/crawl-results` on the crawler itself.
+- A custom callback URL must be reachable from the crawler host.
 
 ## Logging and Observability
 

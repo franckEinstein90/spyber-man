@@ -5,8 +5,6 @@ Spyber Man is a local web crawler you instruct from a chat.
 1. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer, SQLite).
 2. **`frontend/`** — Vite, React, and shadcn chat. The sidebar shows which services are running.
 3. **`mcp/`** — FastMCP server the chat uses to crawl, check status, and start or stop the crawler.
-4. **`front-end/`** — additional Vite UI with a local callback receiver and live monitor.
-5. **`front-end-sample-one/`** — older Streamlit and FastAPI sample. The chat is the primary UI.
 
 ## Documentation
 
@@ -16,7 +14,6 @@ Spyber Man is a local web crawler you instruct from a chat.
 - `documentation/mcp-server.md` — MCP tools, including start, stop, and status.
 - `documentation/backend-architecture.md` — crawler internals.
 - `documentation/backend-api-reference.md` — HTTP contract.
-- `documentation/frontend-sample-one.md` — Streamlit sample.
 - `documentation/deployment-and-operations.md` — how to run it.
 - `documentation/todos-and-technical-debt.md` — known gaps.
 

@@ -14,10 +14,10 @@ Environment is read from `mcp/.env`, then the repo-root `.env`. Shell variables 
 | Variable | Default | Purpose |
 |---|---|---|
 | `CRAWLER_BACKEND_URL` | `http://localhost:3000` | Web crawler base URL |
-| `CRAWL_CALLBACK_URL` | `http://localhost:8000/api/crawl-results` | Default callback for `start_crawl` |
+| `CRAWL_CALLBACK_URL` | `http://localhost:3000/api/crawl-results` | Default callback for `start_crawl` |
 | `OPENAI_API_KEY` | unset | Required only for `summarize_text` |
 
-The chat passes `http://localhost:3000/api/crawl-results` as the callback, so a crawl from the chat does not need the Streamlit sample.
+The chat and the default MCP callback both use the crawler's results endpoint on port `3000`.
 
 ## Tools
 

@@ -12,7 +12,7 @@ uv sync
 
 The server reads `mcp/.env` first and then the workspace-level `.env`. Existing shell environment variables take precedence. To use OpenAI summaries, set `OPENAI_API_KEY` in either file. The crawler defaults can also be overridden with `CRAWLER_BACKEND_URL` and `CRAWL_CALLBACK_URL`.
 
-The chat passes `http://localhost:3000/api/crawl-results` as the callback, and the crawler also keeps recent results in memory. The default `CRAWL_CALLBACK_URL` is still the sample API at `http://localhost:8000/api/crawl-results` for clients that do not override it.
+The chat UI uses port `5173`. The default crawl callback is the crawler's own results endpoint on port `3000`. The MCP server uses stdio and does not listen on a TCP port.
 
 `start_crawler` and `stop_crawler` start and stop `npm run dev` in `webcrawler/`.
 

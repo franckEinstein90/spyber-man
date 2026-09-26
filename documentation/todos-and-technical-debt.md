@@ -20,16 +20,16 @@ The chat (`frontend/`), MCP server (`mcp/`), and `webcrawler/` folder are the cu
    - Current crawl execution is single-flight and in-process.
    - Move to persistent queue (e.g., BullMQ/RabbitMQ/SQS) for reliability and scalability.
 
-4. **Add automated tests (backend + frontend sample)**
+4. **Add automated tests around the crawl HTTP API**
    - No unit/integration tests currently present.
    - Minimum target:
      - AJV request validation tests.
      - Endpoint behavior tests (400/429/success paths).
      - Callback delivery and DB record assertions.
 
-5. **Persist frontend callback results**
-   - `front-end-sample-one/api.py` stores results in memory only.
-   - Add SQLite/Postgres persistence for restart resilience.
+5. **Persist recent crawl results**
+   - `webcrawler` keeps recent titles, excerpts, and screenshot names in memory only.
+   - Add durable storage if those results must survive a restart.
 
 ## Medium Priority
 

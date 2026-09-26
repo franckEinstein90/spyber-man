@@ -9,8 +9,7 @@
 ├── documentation/
 ├── webcrawler/
 ├── frontend/
-├── mcp/
-└── front-end-sample-one/
+└── mcp/
 ```
 
 ## Component Summary
@@ -56,21 +55,7 @@ Core technologies:
 - FastMCP
 - httpx
 
-### 4) `front-end-sample-one/` (Python local integration sample)
-
-Purpose:
-- Provides a Streamlit UI to submit crawl requests.
-- Provides a FastAPI service that receives callbacks from backend.
-- Serves as a test harness / local integration target.
-
-Core technologies:
-- FastAPI
-- Streamlit
-- Pydantic
-- Requests
-- Uvicorn
-
-### 5) `documentation/`
+### 4) `documentation/`
 
 Purpose:
 - Repository-wide documentation for architecture, APIs, operations, and debt tracking.
@@ -84,14 +69,11 @@ Purpose:
 5. The chat polls `get_crawl_results` and shows the title, excerpt, and screenshot.
 6. `start_crawler` and `stop_crawler` start or stop the Node process. The sidebar polls `get_crawler_status`.
 
-The Streamlit sample can still submit crawls and receive callbacks on port 8000. The chat does not need it.
-
 ## Data Artifacts Produced
 
 - **Screenshots**: backend writes PNG files under `webcrawler/screenGrabs/`.
 - **SQLite DB**: backend writes crawl records to `webcrawler/data/spyber.sqlite3`.
 - **In-memory crawl results**: `webcrawler` keeps recent titles, excerpts, and screenshot names for `GET /api/crawl-results`.
-- **Sample callback store**: FastAPI in `front-end-sample-one` keeps callback payloads in process memory when that sample is running.
 
 ## Repository-level Risks
 
