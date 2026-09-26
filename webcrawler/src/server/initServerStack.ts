@@ -37,6 +37,7 @@ export function initServerStack(root: string): ServerStack {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(express.static(path.join(root, 'public')));
+  app.use('/screengrabs', express.static(path.join(root, 'screenGrabs')));
 
   return { app, httpServer, io };
 }

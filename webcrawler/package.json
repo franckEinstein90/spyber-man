@@ -1,5 +1,5 @@
 {
-  "name": "cyber-crawler-back-end",
+  "name": "webcrawler",
   "version": "1.0.0",
   "description": "Cyber Crawler Backend — puppeteer-powered web scraping with real-time monitoring",
   "main": "main.ts",

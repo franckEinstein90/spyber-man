@@ -3,4 +3,6 @@ export interface CrawlResult {
   html: string;
   title: string;
   timestamp: Date;
+  screenshotFile: string | null;
+  error: string | null;
 }

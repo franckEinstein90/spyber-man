@@ -10,6 +10,7 @@ import { createRateLimiter } from './security';
 import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { ComputeEnv } from '../compute/models';
+import { listCrawlResults } from './resultsStore';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -93,6 +94,14 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
       res.json({ message: 'Crawl initiated', options: data });
     }
   );
+
+  app.get('/api/crawl-results', (_req: Request, res: Response) => {
+    res.json({ items: listCrawlResults() });
+  });
+
+  app.post('/api/crawl-results', (_req: Request, res: Response) => {
+    res.json({ status: 'accepted' });
+  });
 
   // ─── Socket.io ──────────────────────────────────────────────────────────────
   io.on('connection', (socket: Socket) => {

@@ -92,7 +92,9 @@ After crawling each URL, backend POSTs to that target's callback URL:
     "url": "https://www.python.org",
     "html": "<html>...</html>",
     "title": "Welcome to Python.org",
-    "timestamp": "2026-04-16T00:00:00.000Z"
+    "timestamp": "2026-04-16T00:00:00.000Z",
+    "screenshotFile": "www.python.org-1710000000000.png",
+    "error": null
   },
   "callbackUrl": "http://localhost:8000/api/crawl-results",
   "receivedAt": "2026-04-16T00:00:00.000Z"
@@ -117,6 +119,12 @@ If callback fails, backend still continues processing next URL and stores failur
 
 - Directory: `screenGrabs/`
 - Naming: `<hostname>-<timestamp>.png`
+
+## Recent results and screenshots
+
+- `GET /api/crawl-results` returns the latest in-memory results (title, excerpt, screenshot file name, error).
+- `POST /api/crawl-results` accepts a callback so the chat can use this service as its own callback target.
+- `GET /screengrabs/<file>` serves PNGs from `screenGrabs/`.
 
 ## Socket.IO notes
 

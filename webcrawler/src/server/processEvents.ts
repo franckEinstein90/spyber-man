@@ -3,6 +3,7 @@ import { CrawlResult } from '../crawler/models/CrawlResult';
 import { CrawlRequestBody } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { recordLinkVisit } from './database';
+import { rememberCrawl } from './resultsStore';
 import http from 'http';
 import https from 'https';
 
@@ -57,8 +58,22 @@ export const processEvents = async (options: ProcessEventsOptions): Promise<Craw
   try {
     for (const target of options.payload.urls) {
       options.scrapperStatus.current_url = target.url;
-      const crawlResult = await crawler.crawl(target.url);
+      let crawlResult: CrawlResult;
+      try {
+        crawlResult = await crawler.crawl(target.url);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        crawlResult = {
+          url: target.url,
+          html: '',
+          title: '',
+          timestamp: new Date(),
+          screenshotFile: null,
+          error: message,
+        };
+      }
       results.push(crawlResult);
+      rememberCrawl(crawlResult);
 
       const visitedAt = new Date().toISOString();
       let callbackStatus: 'success' | 'failed' = 'success';

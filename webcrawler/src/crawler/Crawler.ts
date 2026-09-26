@@ -58,12 +58,14 @@ export class Crawler {
 
       const html = await page.content();
       const title = await page.title();
+      const screenshotFile = path.basename(screenshotPath);
 
-      return { url, html, title, timestamp: new Date() };
+      return { url, html, title, timestamp: new Date(), screenshotFile, error: null };
     }
 
-    catch (_error) {
-      return { url, html: '', title: '', timestamp: new Date() };
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { url, html: '', title: '', timestamp: new Date(), screenshotFile: null, error: message };
     }
     
     finally {
