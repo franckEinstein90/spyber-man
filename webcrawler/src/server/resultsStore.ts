@@ -54,6 +54,12 @@ export function findLatestCapture(url?: string): StoredCrawlResult | undefined {
   );
 }
 
+export function forgetScreenshotFile(filename: string): void {
+  for (const item of recent) {
+    if (item.screenshotFile === filename) item.screenshotFile = null;
+  }
+}
+
 export function setParsedMarkdown(
   url: string,
   screenshotFile: string,

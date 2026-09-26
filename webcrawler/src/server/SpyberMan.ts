@@ -13,8 +13,9 @@ import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { ComputeEnv } from '../compute/models';
 import { answerFromKnowledge, type ConversationTurn } from './ask';
-import { parseRequestedScreenshot } from './parseRequest';
+import { parseRequestedScreenshot, readCrop } from './parseRequest';
 import { listCrawlResults } from './resultsStore';
+import { deleteStoredScreenshot, listScreenshotCatalog } from './screenshotCatalog';
 import {
   getScreenshotDirectory,
   isSafeScreenshotFilename,
@@ -212,15 +213,64 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
     res.json({ items: listCrawlResults() });
   });
 
+  app.get('/api/screenshots', (_req: Request, res: Response) => {
+    listScreenshotCatalog(getScreenshotDirectory(ROOT))
+      .then((items) => {
+        res.json({ items });
+      })
+      .catch((error: unknown) => {
+        res.status(500).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  });
+
+  app.delete('/api/screenshots/:filename', (req: Request, res: Response) => {
+    const filename = req.params.filename;
+    if (!isSafeScreenshotFilename(filename)) {
+      res.status(400).json({ error: 'Invalid screenshot filename' });
+      return;
+    }
+
+    deleteStoredScreenshot(getScreenshotDirectory(ROOT), filename)
+      .then((result) => {
+        if (!result.deleted) {
+          res.status(404).json({ error: 'Screenshot not found' });
+          return;
+        }
+        res.json({ deleted: true, filename });
+      })
+      .catch((error: unknown) => {
+        res.status(500).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  });
+
   app.post('/api/parse', (req: Request, res: Response) => {
-    const rawUrl = (req.body as { url?: unknown } | undefined)?.url;
+    const body = req.body as { url?: unknown; crop?: unknown; screenshotFile?: unknown } | undefined;
+    const rawUrl = body?.url;
     if (rawUrl != null && typeof rawUrl !== 'string') {
       res.status(400).json({ error: 'url must be a string' });
       return;
     }
+    const rawFile = body?.screenshotFile;
+    if (rawFile != null && typeof rawFile !== 'string') {
+      res.status(400).json({ error: 'screenshotFile must be a string' });
+      return;
+    }
+
+    let crop;
+    try {
+      crop = readCrop(body?.crop);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
 
     const url = typeof rawUrl === 'string' ? rawUrl : undefined;
-    parseRequestedScreenshot(url)
+    const screenshotFile = typeof rawFile === 'string' ? rawFile : undefined;
+    parseRequestedScreenshot(url, crop, screenshotFile)
       .then((result) => {
         if ('status' in result) {
           res.status(result.status).json({ error: result.error });

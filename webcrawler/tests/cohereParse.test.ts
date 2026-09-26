@@ -36,4 +36,17 @@ describe('cohereParse', () => {
     expect(slices).toHaveLength(3);
     expect(slices.every((slice) => slice[0] === 0xff && slice[1] === 0xd8)).toBe(true);
   });
+
+  it('crops a screenshot before slicing it', async () => {
+    const image = new Jimp({ width: 40, height: 90, color: 0xffffffff });
+    const file = path.join(os.tmpdir(), `spyber-crop-${Date.now()}.png`);
+    tmpFiles.push(file);
+    await image.write(file as `${string}.png`);
+
+    const slices = await screenshotJpegSlices(file, 40, { x: 5, y: 10, width: 20, height: 30 });
+    expect(slices).toHaveLength(1);
+    const cropped = await Jimp.read(slices[0]);
+    expect(cropped.width).toBe(20);
+    expect(cropped.height).toBe(30);
+  });
 });

@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-import { parseScreenshot } from '../crawler/cohereParse';
-import { latestVisitWithScreenshot, recordAppLog, saveParsedMarkdown } from './database';
+import { parseScreenshot, type ImageCrop } from '../crawler/cohereParse';
+import { latestVisitWithScreenshot, recordAppLog, saveParsedMarkdown, visitForScreenshotFile } from './database';
 import { indexParsedContent } from './rag';
 import {
   findLatestCapture,
@@ -34,14 +34,45 @@ function filenameFromScreenshotUrl(screenshotUrl: string): string | null {
  * Parse an existing crawl screenshot with Cohere.
  * Uses the newest in-memory capture, then the newest database visit.
  */
+export function readCrop(value: unknown): ImageCrop | undefined {
+  if (value == null) return undefined;
+  if (!value || typeof value !== 'object') {
+    throw new Error('crop must be an object with x, y, width, and height');
+  }
+  const record = value as Record<string, unknown>;
+  const numbers = [record.x, record.y, record.width, record.height];
+  if (!numbers.every((item) => typeof item === 'number' && Number.isFinite(item))) {
+    throw new Error('crop x, y, width, and height must be numbers');
+  }
+  const crop = {
+    x: record.x as number,
+    y: record.y as number,
+    width: record.width as number,
+    height: record.height as number,
+  };
+  if (crop.width < 1 || crop.height < 1) {
+    throw new Error('crop width and height must be at least 1');
+  }
+  return crop;
+}
+
 export async function parseRequestedScreenshot(
   url?: string,
+  crop?: ImageCrop,
+  screenshotFile?: string,
 ): Promise<ParsedScreenshot | ParseRequestFailure> {
-  const stored = findLatestCapture(url);
-  let targetUrl = stored?.url;
-  let screenshotFile = stored?.screenshotFile ?? null;
+  if (screenshotFile && !isSafeScreenshotFilename(screenshotFile)) {
+    return { status: 400, error: 'screenshotFile must be a png file name.' };
+  }
 
-  if (!screenshotFile) {
+  const stored = findLatestCapture(screenshotFile ? undefined : url);
+  let targetUrl = url ?? stored?.url;
+  let resolvedFile = screenshotFile ?? stored?.screenshotFile ?? null;
+
+  if (screenshotFile) {
+    const owner = await visitForScreenshotFile(screenshotFile).catch(() => null);
+    targetUrl = owner?.url ?? url;
+  } else if (!resolvedFile) {
     const visit = await latestVisitWithScreenshot(url);
     if (!visit) {
       return {
@@ -52,11 +83,16 @@ export async function parseRequestedScreenshot(
       };
     }
     targetUrl = visit.url;
-    screenshotFile = filenameFromScreenshotUrl(visit.screenshot_url);
+    resolvedFile = filenameFromScreenshotUrl(visit.screenshot_url);
   }
 
-  if (!targetUrl || !screenshotFile || !isSafeScreenshotFilename(screenshotFile)) {
+  screenshotFile = resolvedFile ?? undefined;
+
+  if (!screenshotFile || !isSafeScreenshotFilename(screenshotFile)) {
     return { status: 404, error: 'The stored screenshot file name is not usable.' };
+  }
+  if (!targetUrl) {
+    return { status: 404, error: 'That screenshot is not linked to a crawled page.' };
   }
 
   const imagePath = path.join(getScreenshotDirectory(), screenshotFile);
@@ -71,21 +107,25 @@ export async function parseRequestedScreenshot(
     event: 'parse.started',
     message: `Parsing screenshot ${screenshotFile}`,
     url: targetUrl,
-    details: { screenshotFile },
+    details: { screenshotFile, crop: crop ?? null },
   });
 
   let markdown: string;
   try {
-    markdown = await parseScreenshot(imagePath, async (slice) => {
-      await recordAppLog({
-        level: 'info',
-        source: 'crawler',
-        event: 'parse.slice',
-        message: `Sending slice ${slice.index + 1} of ${slice.total} to Cohere`,
-        url: targetUrl,
-        details: { screenshotFile, slice: slice.index + 1, slices: slice.total },
-      });
-    });
+    markdown = await parseScreenshot(
+      imagePath,
+      async (slice) => {
+        await recordAppLog({
+          level: 'info',
+          source: 'crawler',
+          event: 'parse.slice',
+          message: `Sending slice ${slice.index + 1} of ${slice.total} to Cohere`,
+          url: targetUrl,
+          details: { screenshotFile, slice: slice.index + 1, slices: slice.total, crop: crop ?? null },
+        });
+      },
+      crop,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await recordAppLog({

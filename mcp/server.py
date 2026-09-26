@@ -144,11 +144,34 @@ async def get_crawl_results(limit: int = 20) -> dict:
 
 
 @mcp.tool
-async def parse_screenshot(url: str | None = None) -> dict:
-    """Parse the newest crawl screenshot with Cohere and store embedded chunks. Pass a URL to parse that page."""
-    body: dict[str, str] = {}
+async def parse_screenshot(
+    url: str | None = None,
+    crop_x: int | None = None,
+    crop_y: int | None = None,
+    crop_width: int | None = None,
+    crop_height: int | None = None,
+    screenshot_file: str | None = None,
+) -> dict:
+    """Parse a crawl screenshot with Cohere. Pass a URL to choose the page, and crop pixels to parse only that region."""
+    body: dict[str, str | dict[str, int]] = {}
     if url:
         body["url"] = _validate_http_url(url, "url")
+    crop_fields = (crop_x, crop_y, crop_width, crop_height)
+    if any(value is not None for value in crop_fields):
+        if any(value is None for value in crop_fields):
+            return {"error": "crop_x, crop_y, crop_width, and crop_height are all required"}
+        if crop_width < 1 or crop_height < 1:
+            return {"error": "crop width and height must be at least 1"}
+        body["crop"] = {
+            "x": crop_x,
+            "y": crop_y,
+            "width": crop_width,
+            "height": crop_height,
+        }
+    if screenshot_file:
+        if "/" in screenshot_file or "\\" in screenshot_file or not screenshot_file.lower().endswith(".png"):
+            return {"error": "screenshot_file must be a png file name"}
+        body["screenshotFile"] = screenshot_file
 
     try:
         async with httpx.AsyncClient(timeout=540) as client:
