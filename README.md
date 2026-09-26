@@ -2,9 +2,10 @@
 
 Spyber Man is a local web crawler you instruct from a chat.
 
-1. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer, SQLite).
-2. **`frontend/`** — Vite, React, and shadcn chat. The sidebar shows which services are running.
-3. **`mcp/`** — FastMCP server the chat uses to crawl, check status, and start or stop the crawler.
+1. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer).
+2. **`data/`** — embedded Postgres with pgvector. SQL migrations live in `data/migrations`.
+3. **`frontend/`** — Vite, React, and shadcn chat. The sidebar shows which services are running.
+4. **`mcp/`** — FastMCP server the chat uses to crawl, parse screenshots, read logs, and start or stop the crawler and the database.
 
 ## Documentation
 
@@ -19,7 +20,7 @@ Spyber Man is a local web crawler you instruct from a chat.
 
 ## Quick start
 
-Run the crawler and the chat. The chat starts the MCP server for you.
+Run the crawler and the chat. The crawler starts embedded Postgres on `POSTGRES_PORT` when it is not already listening. The chat starts the MCP server for you.
 
 ```bash
 # Terminal 1 — crawler
@@ -37,8 +38,11 @@ npm run dev
 |---|---|
 | Chat | http://localhost:5173 |
 | Web crawler | http://localhost:3000 |
+| Embedded Postgres | `127.0.0.1:5432` |
 
-In the chat you can ask whether the web crawler is running, tell it to start or stop, or send one or more `http`/`https` URLs to crawl. Screenshots come back in the thread.
+In the chat you can ask whether the web crawler or the database is running, tell it to start or stop either one, and apply pending migrations. Send one or more `http`/`https` URLs to crawl. Screenshots and page text come back in the thread. Parsing is separate: say `parse the screenshot` to send the latest image to Cohere and store the markdown as embedded chunks. Say `show the logs` to read `app_logs`.
+
+`COHERE_API_KEY` is required to parse. `OPENAI_API_KEY` is required for those embeddings and for text summaries. Both belong in the repo-root `.env`. See `.env.example`.
 
 Puppeteer looks for Chrome under `~/.cache/puppeteer`. If a crawl fails because Chrome is missing, set `PUPPETEER_CACHE_DIR` to that directory before starting `webcrawler`.
 
@@ -49,6 +53,8 @@ Puppeteer looks for Chrome under `~/.cache/puppeteer`. If a crawl fails because 
 - **Alias**: `/api/process-events`
 - **Service**: `webcrawler`
 - Recent results: `GET /api/crawl-results`
+- Parse a stored screenshot: `POST /api/parse`
+- Crawler logs: `GET /api/logs`
 - Screenshots: `GET /screengrabs/<file>.png` and `GET /screenGrabs/<file>.png`
 
 The chat does not call that endpoint directly. It calls the MCP tools in `mcp/`, which call the crawler.

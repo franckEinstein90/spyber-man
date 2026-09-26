@@ -103,17 +103,25 @@ Also includes `Retry-After` header.
 
 ## 3) `GET /api/crawl-results`
 
-Returns the in-memory list of recent crawls, newest first, up to 50 items. Each item has `url`, `title`, `excerpt`, `screenshotFile`, `error`, and `timestamp`. The excerpt is plain text, not the full HTML.
+Returns the in-memory list of recent crawls, newest first, up to 50 items. Each item has `url`, `title`, `excerpt`, `screenshotFile`, `parsedMarkdown`, `error`, and `timestamp`. The excerpt is plain text, not the full HTML. `parsedMarkdown` stays empty until you ask to parse that screenshot.
 
 ## 4) `POST /api/crawl-results`
 
 Accepts a crawler callback and returns `{"status":"accepted"}`. The chat points callbacks here. The result list is filled by the crawler itself, before the callback is sent.
 
-## 5) `GET /screengrabs/<file>`
+## 5) `POST /api/parse`
+
+Parses a screenshot that a crawl already saved. The body may be `{}` to use the newest screenshot, or `{ "url": "https://example.com" }` to use that page's newest screenshot. Cohere Parse (`parse-v5.0`) runs only for this request, and only when `COHERE_API_KEY` is set. The markdown is stored on the visit. That text is then split into chunks, embedded with OpenAI `text-embedding-ada-002`, and written to `rag.chunks`. The response includes `ragChunks` and `ragError`.
+
+## 6) `GET /api/logs`
+
+Returns recent rows from `app_logs`, newest first. Query `limit` (1–200, default 50) and optional `level` (`debug`, `info`, `warn`, `error`). Parse and callback failures are written here.
+
+## 7) `GET /screengrabs/<file>`
 
 Serves a PNG written under `screenGrabs/`. The chat loads these through the Vite proxy.
 
-## 6) Socket.IO Events
+## 8) Socket.IO Events
 
 Current surface:
 
@@ -151,7 +159,7 @@ For each target URL, backend performs `POST <callbackUrl>` with JSON payload:
 }
 ```
 
-If callback fails (non-2xx or network error), the failure is recorded to SQLite as `callback_status = failed` with an error message.
+If callback fails (non-2xx or network error), the failure is recorded to Postgres as `callback_status = failed` with an error message.
 
 ## Forward-compatibility note
 

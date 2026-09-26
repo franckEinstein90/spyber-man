@@ -7,4 +7,4 @@ npm install
 npm run dev
 ```
 
-The UI is http://localhost:5173. The crawler should be available on port 3000. This dev server starts the MCP server in `../mcp` and proxies crawler API calls to port 3000.
+The UI is http://localhost:5173. The crawler should be available on port 3000, and embedded Postgres on port 5432. This dev server starts the MCP server in `../mcp` and proxies crawler API calls to port 3000. The sidebar shows both services.

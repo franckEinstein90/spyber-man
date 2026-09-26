@@ -2,7 +2,7 @@
 
 This list is based on direct repository code analysis and is grouped by priority.
 
-The chat (`frontend/`), MCP server (`mcp/`), and `webcrawler/` folder are the current baseline. The chat can start, stop, and report the web crawler. Screenshots are written to disk and served at `/screengrabs`. Recent results stay in memory only.
+The chat (`frontend/`), MCP server (`mcp/`), embedded Postgres (`data/`), and `webcrawler/` folder are the current baseline. The chat can start, stop, and report the web crawler and the database, crawl a page, and parse a screenshot on request. Screenshots are written to disk and served at `/screengrabs`. The chat's recent-result list stays in memory. Parsed chunks and `app_logs` are in Postgres.
 
 ## High Priority
 
@@ -20,12 +20,9 @@ The chat (`frontend/`), MCP server (`mcp/`), and `webcrawler/` folder are the cu
    - Current crawl execution is single-flight and in-process.
    - Move to persistent queue (e.g., BullMQ/RabbitMQ/SQS) for reliability and scalability.
 
-4. **Add automated tests around the crawl HTTP API**
-   - No unit/integration tests currently present.
-   - Minimum target:
-     - AJV request validation tests.
-     - Endpoint behavior tests (400/429/success paths).
-     - Callback delivery and DB record assertions.
+4. **Cover the crawl HTTP API**
+   - Unit tests cover crawl batching, the database client, screenshot slicing, and migrations.
+   - Still missing: HTTP tests for validation, `429` rate limits, and the running server.
 
 5. **Persist recent crawl results**
    - `webcrawler` keeps recent titles, excerpts, and screenshot names in memory only.
@@ -34,20 +31,21 @@ The chat (`frontend/`), MCP server (`mcp/`), and `webcrawler/` folder are the cu
 ## Medium Priority
 
 6. **Unify logging strategy in backend**
-   - Replace `console.error` in `processEvents.ts` with Winston logger.
-   - Include stable structured fields (url, callbackUrl, status, latencyMs).
+   - `app_logs` records parse steps and callback failures, and `GET /api/logs` exposes them.
+   - Winston still logs to the console, and some paths still use `console.error`.
+   - Add correlation ids so a crawl, its callback, and its parse share one id.
 
 7. **Harden crawler error visibility**
    - `Crawler.crawl` currently swallows detailed errors and returns empty result.
    - Return or log specific error diagnostics for troubleshooting.
 
 8. **Improve concurrency model and backpressure controls**
-   - Process currently crawls targets sequentially.
-   - Add configurable concurrency limits and retry policies.
+   - A batch crawls up to 3 URLs at a time.
+   - Add configurable limits and retry policies.
 
-9. **Add health/readiness probes in backend**
-   - Root route renders HTML, but no explicit `/health` endpoint.
-   - Add service readiness checks including DB write and browser launch sanity checks.
+9. **Extend health checks**
+   - `GET /health` reports whether a crawl is running.
+   - It does not yet check that Postgres accepts writes or that Chrome can launch.
 
 10. **Externalize configuration**
    - Convert hard-coded values (timeouts, user-agent, screenshot directory, rate limits) into environment-driven config.

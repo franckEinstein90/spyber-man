@@ -2,7 +2,7 @@
 
 ## Mission
 
-The backend service accepts crawl requests, executes website crawl/snapshot jobs via Puppeteer, delivers asynchronous callback events per target URL, and records link-level delivery status in SQLite.
+The backend service accepts crawl requests, executes website crawl/snapshot jobs via Puppeteer, delivers asynchronous callback events per target URL, and records link-level delivery status in embedded Postgres.
 
 ## Entry Point and Boot Sequence
 
@@ -104,6 +104,7 @@ Callback payload shape currently sent by backend:
   - Waits 3 seconds and attempts cookie/close button clicks (best effort).
   - Scrolls through page to trigger lazy loading.
   - Saves full-page screenshot to `screenGrabs/`.
+  - Returns HTML, page title, timestamp, and the screenshot. Parsing is a separate request.
   - Returns HTML, page title, timestamp, screenshot file name, and an error string when navigation fails.
 - Ensures page close in `finally`.
 - Browser close is called by `processEvents` when done.
@@ -125,9 +126,11 @@ Migration note:
 
 ## Persistence Model
 
-`src/server/database.ts` uses `better-sqlite3`:
+`src/server/database.ts` uses the `pg` client. The database itself is the embedded Postgres in `data/`, with pgvector enabled:
 
-- DB file: `data/spyber.sqlite3`
+- Listen port: `POSTGRES_PORT` from the repo-root `.env` (default `5432`)
+- Files: `data/pgdata`
+- Migrations: `data/migrations`
 - Table: `link_visits`
   - `id`
   - `url`
@@ -135,12 +138,19 @@ Migration note:
   - `visited_at`
   - `callback_status` (`success | failed` logical enum)
   - `callback_error` (nullable)
+  - `screenshot_url` (nullable)
+  - `ocr_text` (nullable)
+  - `parsed_markdown` (nullable, Cohere Parse output)
+  - `embedding` (`vector(1536)`, nullable)
+- Table `app_logs`: crawler events (`parse.started`, `parse.slice`, `parse.finished`, `parse.failed`, `crawl.callback_failed`) with level, message, URL, and duration
+- Schema `rag`
+  - Table `rag.chunks`: one row per chunk of a parsed page, with `link_visit_id`, `url`, `chunk_index`, `content`, and `embedding vector(1536)` from OpenAI `text-embedding-ada-002`
 
 Persistence purpose:
 - Audit callback delivery success/failure per target URL.
 - Local troubleshooting and forensic trace.
 
-Recent crawl payloads used by the chat are not in SQLite. `src/server/resultsStore.ts` keeps the latest 50 results in memory: URL, title, a 500-character text excerpt, screenshot file name, error, and timestamp. `GET /api/crawl-results` returns that list. `GET /screengrabs/<file>` serves the PNGs.
+Recent crawl payloads used by the chat are not in Postgres. `src/server/resultsStore.ts` keeps the latest 50 results in memory: URL, title, a 500-character text excerpt, screenshot file name, parsed markdown, error, and timestamp. `GET /api/crawl-results` returns that list. `POST /api/parse` fills `parsed_markdown` for a screenshot you choose and writes that text into `rag.chunks` with embeddings. `GET /screengrabs/<file>` serves the PNGs.
 
 ## Socket.IO Surface
 

@@ -8,7 +8,7 @@ TypeScript backend service responsible for crawl orchestration, screenshot captu
 - Crawls each URL using Puppeteer.
 - Captures full-page screenshots under `screenGrabs/`.
 - Sends crawl results to each target's `callbackUrl`.
-- Records callback delivery status in SQLite (`data/spyber.sqlite3`).
+- Records callback delivery status in embedded Postgres (`POSTGRES_PORT`, migrations in `../data/migrations`).
 
 ## Run locally
 
@@ -105,15 +105,24 @@ If callback fails, backend still continues processing next URL and stores failur
 
 ## Storage
 
-### SQLite database
+### Postgres
 
-- Path: `data/spyber.sqlite3`
+Embedded Postgres is started from `../data` and listens on `POSTGRES_PORT` (default `5432`).
+
+- Files: `../data/pgdata`
+- Migrations: `../data/migrations`
 - Table: `link_visits`
   - `url`
   - `callback_url`
   - `visited_at`
   - `callback_status`
   - `callback_error`
+  - `screenshot_url`
+  - `ocr_text`
+  - `parsed_markdown`
+  - `embedding` (`vector(1536)`, pgvector)
+- Schema `rag`, table `rag.chunks`: parsed page text split into chunks, each with an ada-002 embedding
+- Table `app_logs`: parse steps and callback failures
 
 ### Screenshots
 
@@ -122,8 +131,10 @@ If callback fails, backend still continues processing next URL and stores failur
 
 ## Recent results and screenshots
 
-- `GET /api/crawl-results` returns the latest in-memory results (title, excerpt, screenshot file name, error).
+- `GET /api/crawl-results` returns the latest in-memory results (title, excerpt, screenshot file name, parsed markdown, error).
 - `POST /api/crawl-results` accepts a callback so the chat can use this service as its own callback target.
+- `POST /api/parse` parses a stored screenshot with Cohere and writes embedded chunks. Crawling does not call Cohere.
+- `GET /api/logs` returns recent `app_logs` rows.
 - `GET /screengrabs/<file>` serves PNGs from `screenGrabs/`.
 
 ## Socket.IO notes
