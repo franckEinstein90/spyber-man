@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This folder is a local integration harness:
+The primary UI is the chat in `frontend/`. This folder is an older local integration harness:
 
 1. **Streamlit app (`app.py`)** submits crawl jobs to Node backend.
 2. **FastAPI app (`api.py`)** receives asynchronous callback results.

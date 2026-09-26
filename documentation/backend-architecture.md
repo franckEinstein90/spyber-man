@@ -1,4 +1,4 @@
-# Backend Architecture (`back-end/`)
+# Backend Architecture (`webcrawler/`)
 
 ## Mission
 
@@ -69,9 +69,10 @@ Implemented in `src/server/initServerStack.ts`:
 For each target in payload:
 
 1. Update `scrapperStatus.current_url`.
-2. Run crawler (`crawler.crawl(target.url)`).
-3. POST callback payload to `target.callbackUrl`.
-4. Persist link visit record with callback delivery outcome.
+2. Run crawler (`crawler.crawl(target.url)`). A per-URL failure is stored as an error result and does not abort the batch.
+3. Remember a short result (title, excerpt, screenshot file name, error) in memory.
+4. POST callback payload to `target.callbackUrl`.
+5. Persist link visit record with callback delivery outcome.
 
 Callback payload shape currently sent by backend:
 
@@ -82,7 +83,9 @@ Callback payload shape currently sent by backend:
     "url": "https://example.com",
     "html": "<html>...</html>",
     "title": "Example",
-    "timestamp": "2026-04-16T00:00:00.000Z"
+    "timestamp": "2026-04-16T00:00:00.000Z",
+    "screenshotFile": "example.com-1710000000000.png",
+    "error": null
   },
   "callbackUrl": "http://localhost:8000/api/crawl-results",
   "receivedAt": "2026-04-16T00:00:00.000Z"
@@ -101,7 +104,7 @@ Callback payload shape currently sent by backend:
   - Waits 3 seconds and attempts cookie/close button clicks (best effort).
   - Scrolls through page to trigger lazy loading.
   - Saves full-page screenshot to `screenGrabs/`.
-  - Returns HTML + page title + timestamp.
+  - Returns HTML, page title, timestamp, screenshot file name, and an error string when navigation fails.
 - Ensures page close in `finally`.
 - Browser close is called by `processEvents` when done.
 
@@ -136,6 +139,8 @@ Migration note:
 Persistence purpose:
 - Audit callback delivery success/failure per target URL.
 - Local troubleshooting and forensic trace.
+
+Recent crawl payloads used by the chat are not in SQLite. `src/server/resultsStore.ts` keeps the latest 50 results in memory: URL, title, a 500-character text excerpt, screenshot file name, error, and timestamp. `GET /api/crawl-results` returns that list. `GET /screengrabs/<file>` serves the PNGs.
 
 ## Socket.IO Surface
 

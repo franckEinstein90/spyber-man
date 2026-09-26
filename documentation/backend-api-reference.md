@@ -101,7 +101,19 @@ Also includes `Retry-After` header.
 - Crawl and callback delivery happen asynchronously after HTTP response.
 - One backend process handles one crawl batch at a time (single-flight guard).
 
-## 3) Socket.IO Events
+## 3) `GET /api/crawl-results`
+
+Returns the in-memory list of recent crawls, newest first, up to 50 items. Each item has `url`, `title`, `excerpt`, `screenshotFile`, `error`, and `timestamp`. The excerpt is plain text, not the full HTML.
+
+## 4) `POST /api/crawl-results`
+
+Accepts a crawler callback and returns `{"status":"accepted"}`. The chat points callbacks here. The result list is filled by the crawler itself, before the callback is sent.
+
+## 5) `GET /screengrabs/<file>`
+
+Serves a PNG written under `screenGrabs/`. The chat loads these through the Vite proxy.
+
+## 6) Socket.IO Events
 
 Current surface:
 
@@ -130,7 +142,9 @@ For each target URL, backend performs `POST <callbackUrl>` with JSON payload:
     "url": "https://example.com",
     "html": "<html>...</html>",
     "title": "Example",
-    "timestamp": "2026-04-16T00:00:00.000Z"
+    "timestamp": "2026-04-16T00:00:00.000Z",
+    "screenshotFile": "example.com-1710000000000.png",
+    "error": null
   },
   "callbackUrl": "http://localhost:8000/api/crawl-results",
   "receivedAt": "2026-04-16T00:00:00.000Z"

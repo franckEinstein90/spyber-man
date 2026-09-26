@@ -7,18 +7,21 @@
 ├── LICENSE
 ├── README.md
 ├── documentation/
-├── back-end/
+├── webcrawler/
+├── frontend/
+├── mcp/
 └── front-end-sample-one/
 ```
 
 ## Component Summary
 
-### 1) `back-end/` (TypeScript service)
+### 1) `webcrawler/` (TypeScript service)
 
 Purpose:
 - Exposes crawl initiation endpoint.
-- Runs Puppeteer crawler jobs.
+- Runs Puppeteer crawler jobs and writes full-page screenshots.
 - Sends asynchronous callback payloads for each crawled URL.
+- Keeps a short in-memory list of recent titles, excerpts, and screenshot file names.
 - Persists crawl execution metadata in SQLite.
 - Hosts a basic dashboard page and Socket.IO server.
 
@@ -30,7 +33,30 @@ Core technologies:
 - better-sqlite3
 - Winston
 
-### 2) `front-end-sample-one/` (Python local integration sample)
+### 2) `frontend/` (chat UI)
+
+Purpose:
+- Chat for crawl instructions and for starting, stopping, and checking the web crawler.
+- Collapsible sidebar with a service status list. The web crawler is the first entry.
+
+Core technologies:
+- Vite
+- React
+- shadcn/ui
+- Tailwind CSS
+
+### 3) `mcp/` (MCP server)
+
+Purpose:
+- stdio tools the chat calls: status, start, stop, crawl, recent results, and optional text summary.
+- Starts and stops the `webcrawler` process on the local machine.
+
+Core technologies:
+- Python
+- FastMCP
+- httpx
+
+### 4) `front-end-sample-one/` (Python local integration sample)
 
 Purpose:
 - Provides a Streamlit UI to submit crawl requests.
@@ -44,24 +70,28 @@ Core technologies:
 - Requests
 - Uvicorn
 
-### 3) `documentation/`
+### 5) `documentation/`
 
 Purpose:
 - Repository-wide documentation for architecture, APIs, operations, and debt tracking.
 
 ## Runtime Interaction Model
 
-1. User enters URLs in Streamlit (`front-end-sample-one/app.py`).
-2. Streamlit sends `POST /api/process-events` to Node backend (`back-end`).
-3. Node backend validates payload and crawls each URL.
-4. For each URL, backend pushes result to provided callback URL (typically `front-end-sample-one/api.py:/api/crawl-results`).
-5. Backend logs visit/callback status into SQLite database.
+1. User instructs the chat (`frontend/`, port 5173).
+2. The chat calls MCP tools (`mcp/server.py`) over stdio.
+3. `start_crawl` posts `POST /api/process-events` to `webcrawler` (port 3000).
+4. The crawler visits each URL, writes a PNG under `screenGrabs/`, stores a short result in memory, and POSTs the full result to the callback URL.
+5. The chat polls `get_crawl_results` and shows the title, excerpt, and screenshot.
+6. `start_crawler` and `stop_crawler` start or stop the Node process. The sidebar polls `get_crawler_status`.
+
+The Streamlit sample can still submit crawls and receive callbacks on port 8000. The chat does not need it.
 
 ## Data Artifacts Produced
 
-- **Screenshots**: backend writes PNG files under `back-end/screenGrabs/`.
-- **SQLite DB**: backend writes crawl records to `back-end/data/spyber.sqlite3`.
-- **In-memory callback store**: frontend FastAPI keeps callback payloads in process memory (`received_crawl_results`).
+- **Screenshots**: backend writes PNG files under `webcrawler/screenGrabs/`.
+- **SQLite DB**: backend writes crawl records to `webcrawler/data/spyber.sqlite3`.
+- **In-memory crawl results**: `webcrawler` keeps recent titles, excerpts, and screenshot names for `GET /api/crawl-results`.
+- **Sample callback store**: FastAPI in `front-end-sample-one` keeps callback payloads in process memory when that sample is running.
 
 ## Repository-level Risks
 

@@ -5,13 +5,13 @@
 - Node.js runtime compatible with TypeScript target/build output.
 - Chromium runtime dependencies required by Puppeteer.
 - Writable filesystem paths:
-  - `back-end/data/` (SQLite file)
-  - `back-end/screenGrabs/` (screenshots)
+  - `webcrawler/data/` (SQLite file)
+  - `webcrawler/screenGrabs/` (screenshots)
 
 ## Backend Local Run
 
 ```bash
-cd back-end
+cd webcrawler
 npm install
 npm run dev
 ```
@@ -22,6 +22,32 @@ Production-style run:
 npm run build
 npm start
 ```
+
+## Chat
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Chat URL: `http://localhost:5173`
+
+The dev server starts `mcp/server.py` and proxies `/api` and `/screengrabs` to port 3000. Ask the chat to start the crawler if port 3000 is down.
+
+Set `PUPPETEER_CACHE_DIR` to `~/.cache/puppeteer` when Chrome is installed there and the crawler cannot find it.
+
+## MCP server
+
+The chat launches this. To run it for another client:
+
+```bash
+cd mcp
+uv sync
+uv run server.py
+```
+
+`start_crawler` and `stop_crawler` control the `webcrawler` process. See `documentation/mcp-server.md`.
 
 ## Frontend Sample Local Run
 
@@ -61,13 +87,13 @@ uv run streamlit run app.py
 
 ### SQLite maintenance
 
-DB file path: `back-end/data/spyber.sqlite3`
+DB file path: `webcrawler/data/spyber.sqlite3`
 
 Useful quick checks:
 
 ```bash
-sqlite3 back-end/data/spyber.sqlite3 ".tables"
-sqlite3 back-end/data/spyber.sqlite3 "SELECT COUNT(*) FROM link_visits;"
+sqlite3 webcrawler/data/spyber.sqlite3 ".tables"
+sqlite3 webcrawler/data/spyber.sqlite3 "SELECT COUNT(*) FROM link_visits;"
 ```
 
 ### Screenshot management

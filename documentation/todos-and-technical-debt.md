@@ -2,6 +2,8 @@
 
 This list is based on direct repository code analysis and is grouped by priority.
 
+The chat (`frontend/`), MCP server (`mcp/`), and `webcrawler/` folder are the current baseline. The chat can start, stop, and report the web crawler. Screenshots are written to disk and served at `/screengrabs`. Recent results stay in memory only.
+
 ## High Priority
 
 1. **Migrate crawler from Puppeteer to `puppeteer-extra` with pluggable behavior**
