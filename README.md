@@ -5,7 +5,8 @@ Spyber Man is a local web crawler you instruct from a chat.
 1. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer, SQLite).
 2. **`frontend/`** — Vite, React, and shadcn chat. The sidebar shows which services are running.
 3. **`mcp/`** — FastMCP server the chat uses to crawl, check status, and start or stop the crawler.
-4. **`front-end-sample-one/`** — older Streamlit and FastAPI sample. The chat is the primary UI.
+4. **`front-end/`** — additional Vite UI with a local callback receiver and live monitor.
+5. **`front-end-sample-one/`** — older Streamlit and FastAPI sample. The chat is the primary UI.
 
 ## Documentation
 
@@ -47,9 +48,10 @@ Puppeteer looks for Chrome under `~/.cache/puppeteer`. If a crawl fails because 
 ## Crawl endpoint
 
 - **Method**: `POST`
-- **Path**: `/api/process-events`
+- **Preferred path**: `/api/crawls`
+- **Alias**: `/api/process-events`
 - **Service**: `webcrawler`
 - Recent results: `GET /api/crawl-results`
-- Screenshots: `GET /screengrabs/<file>.png`
+- Screenshots: `GET /screengrabs/<file>.png` and `GET /screenGrabs/<file>.png`
 
 The chat does not call that endpoint directly. It calls the MCP tools in `mcp/`, which call the crawler.

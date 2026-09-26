@@ -16,6 +16,7 @@ logs/
 # Runtime artifacts
 data/
 screenGrabs/
+*.traineddata
 
 # OS
 .DS_Store

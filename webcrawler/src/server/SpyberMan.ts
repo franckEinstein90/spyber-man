@@ -3,6 +3,8 @@ import { Socket } from 'socket.io';
 import { Logger } from 'winston';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import path from 'path';
+import fs from 'fs';
 import { processEvents } from './processEvents';
 import { initServerStack } from './initServerStack';
 import { initDatabase } from './database';
@@ -11,6 +13,11 @@ import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { ComputeEnv } from '../compute/models';
 import { listCrawlResults } from './resultsStore';
+import {
+  getScreenshotDirectory,
+  isSafeScreenshotFilename,
+  SCREENSHOT_ROUTE_PREFIX,
+} from './screenshotPaths';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -58,7 +65,7 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
 
   const scrapperStatus: SpyberManCrawlStatus = {
     running: false,
-    current_url: null as string | null,
+    current_urls: [],
   };
   // ─── Routes ─────────────────────────────────────────────────────────────────
 
@@ -67,32 +74,82 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
     res.render('index', { title: 'Cyber Crawler — Monitor' });
   });
 
-  // Initiate a crawl via REST
+  app.get('/health', (_req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      crawlRunning: scrapperStatus.running,
+      currentUrls: scrapperStatus.current_urls,
+    });
+  });
+
+  // Serve crawl screenshots written under screenGrabs/.
+  // Example: GET /screenGrabs/example.com-1710000000000.png
+  app.get(`${SCREENSHOT_ROUTE_PREFIX}/:filename`, (req: Request, res: Response) => {
+    const filename = req.params.filename;
+    if (!isSafeScreenshotFilename(filename)) {
+      res.status(400).json({ error: 'Invalid screenshot filename' });
+      return;
+    }
+
+    const filePath = path.join(getScreenshotDirectory(ROOT), filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Screenshot not found' });
+      return;
+    }
+
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.type('png');
+    res.sendFile(filePath);
+  });
+
+  // Broadcast a snapshot of the current crawl status to all connected clients.
+  const buildStatus = () => ({
+    running: scrapperStatus.running,
+    currentUrls: [...scrapperStatus.current_urls],
+  });
+  const broadcastStatus = (): void => {
+    io.emit('crawl:status', buildStatus());
+  };
+
+  // Initiate a crawl via REST.
+  const initiateCrawl = async (req: Request, res: Response): Promise<void> => {
+    const data = req.body as CrawlRequestBody;
+    if (scrapperStatus.running) {
+      res.status(400).json({ error: 'A crawl is already in progress' });
+      return;
+    }
+    scrapperStatus.running = true;
+    broadcastStatus();
+
+    processEvents({
+      payload: data,
+      scrapperStatus,
+      logger,
+      onEvent: (event) => {
+        io.emit('crawl:activity', event);
+        broadcastStatus();
+      },
+    })
+      .then((_results) => {
+        scrapperStatus.running = false;
+        broadcastStatus();
+      })
+      .catch((err) => {
+        logger.error('Error processing events:', err);
+        scrapperStatus.running = false;
+        broadcastStatus();
+      });
+    res.json({ message: 'Crawl initiated', options: data });
+  };
+
+  // Preferred, descriptive route. `/api/process-events` is kept as a
+  // backward-compatible alias for existing clients and documentation.
+  const crawlRoutePaths = ['/api/crawls', '/api/process-events'];
   app.post(
-    '/api/process-events',
+    crawlRoutePaths,
     processEventsRateLimiter,
     validateProcessEventsRequest,
-    async (req: Request, res: Response): Promise<void> => {
-      const data = req.body as CrawlRequestBody;
-      if (scrapperStatus.running) {
-        res.status(400).json({ error: 'A crawl is already in progress' });
-        return;
-      }
-      scrapperStatus.running = true;
-
-      processEvents({
-        payload: data,
-        scrapperStatus,
-      })
-        .then((_results) => {
-          scrapperStatus.running = false;
-        })
-        .catch((err) => {
-          logger.error('Error processing events:', err);
-          scrapperStatus.running = false;
-        });
-      res.json({ message: 'Crawl initiated', options: data });
-    }
+    initiateCrawl,
   );
 
   app.get('/api/crawl-results', (_req: Request, res: Response) => {
@@ -104,15 +161,13 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
   });
 
   // ─── Socket.io ──────────────────────────────────────────────────────────────
+  // The monitor dashboard is read-only: it observes activity and accepts no
+  // input. Clients receive a status snapshot on connect and live `crawl:status`
+  // / `crawl:activity` events thereafter.
   io.on('connection', (socket: Socket) => {
     logger.info(`[socket] client connected  — ${socket.id}`);
 
-    // Client can also kick off a crawl over the socket
-    socket.on('crawl:request', (data: { url: string }) => {
-      logger.info(`[socket] crawl requested for ${data.url}`);
-      io.emit('crawl:start', { url: data.url });
-      // TODO: invoke Crawler and stream results back
-    });
+    socket.emit('crawl:status', buildStatus());
 
     socket.on('disconnect', () => {
       logger.info(`[socket] client disconnected — ${socket.id}`);

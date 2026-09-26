@@ -11,7 +11,7 @@ export function applyBasicSecurityHeaders(req: Request, res: Response, next: Nex
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Strict-Transport-Security', `max-age=${ONE_YEAR_IN_SECONDS}; includeSubDomains`);
 
-  if (req.path.startsWith('/public/')) {
+  if (req.path.startsWith('/public/') || req.path.startsWith('/screenGrabs/')) {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   } else {
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');

@@ -28,8 +28,8 @@ export function rememberCrawl(result: CrawlResult): StoredCrawlResult {
     url: result.url,
     title: result.title,
     excerpt: excerptFromHtml(result.html),
-    screenshotFile: result.screenshotFile,
-    error: result.error,
+    screenshotFile: result.screenshotFile ?? null,
+    error: result.error ?? null,
     timestamp: result.timestamp instanceof Date ? result.timestamp.toISOString() : new Date(result.timestamp).toISOString(),
   };
 
