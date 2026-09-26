@@ -105,10 +105,16 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<boolea
         sendJson(res, 400, { error: "Tool name is required" })
         return true
       }
-      const result = (await client.callTool({
-        name: body.name,
-        arguments: body.arguments ?? {},
-      })) as ToolResult
+      // Cohere Parse plus embeddings can run for several minutes.
+      const timeout = body.name === "parse_screenshot" ? 540_000 : 60_000
+      const result = (await client.callTool(
+        {
+          name: body.name,
+          arguments: body.arguments ?? {},
+        },
+        undefined,
+        { timeout },
+      )) as ToolResult
       sendJson(res, 200, { result: payloadFromResult(result) })
       return true
     }

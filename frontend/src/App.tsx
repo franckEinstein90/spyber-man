@@ -45,8 +45,10 @@ function healthDotClass(health: ServiceHealth): string {
 
 const SUGGESTIONS = [
   "Is the web crawler running?",
+  "Are any database migrations pending?",
   "Crawl https://example.com and show me the screenshot.",
-  "Open https://www.python.org and tell me the page title.",
+  "Parse the latest screenshot.",
+  "Show the logs.",
 ]
 
 function loadConversations(): Conversation[] {
@@ -124,9 +126,18 @@ function MessageParts({ parts }: { parts: MessagePart[] }) {
                 </CardHeader>
                 {item.error ? (
                   <CardContent className="text-destructive">{item.error}</CardContent>
-                ) : item.excerpt ? (
-                  <CardContent className="text-muted-foreground">{item.excerpt}</CardContent>
-                ) : null}
+                ) : (
+                  <>
+                    {item.excerpt ? (
+                      <CardContent className="text-muted-foreground">{item.excerpt}</CardContent>
+                    ) : null}
+                    {item.parsedMarkdown ? (
+                      <CardContent className="max-h-80 overflow-auto whitespace-pre-wrap text-sm">
+                        {item.parsedMarkdown}
+                      </CardContent>
+                    ) : null}
+                  </>
+                )}
               </Card>
             ))}
           </div>
@@ -300,7 +311,7 @@ export default function App() {
         <header className="border-b px-6 py-3">
           <div className="text-sm font-medium">Instruct Spyber</div>
           <p className="text-xs text-muted-foreground">
-            Ask Spyber to start, stop, or check the web crawler. Page URLs come back with a screenshot.
+            Ask Spyber to crawl a page, then parse the screenshot if you want markdown.
           </p>
         </header>
 
@@ -310,8 +321,9 @@ export default function App() {
               <div className="flex flex-col gap-3 pt-16">
                 <h1 className="text-2xl font-medium tracking-tight">What should I open?</h1>
                 <p className="max-w-xl text-sm text-muted-foreground">
-                  Ask whether the web crawler is running, or tell Spyber to start or stop it. You can
-                  also send URLs and the screenshot comes back in this thread.
+                  Ask whether the web crawler or the database is running, or tell Spyber to start or stop
+                  either one. You can check for pending migrations and apply them, or send a URL
+                  and the screenshot comes back in this thread. Ask Spyber to parse it when you want markdown.
                 </p>
                 <div className="mt-4 flex flex-col items-start gap-2">
                   {SUGGESTIONS.map((suggestion) => (

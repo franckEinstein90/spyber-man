@@ -15,6 +15,11 @@ for env_file in (MCP_DIR / ".env", MCP_DIR.parent / ".env"):
 from crawler_ctl import crawler_status
 from crawler_ctl import start_crawler as launch_crawler
 from crawler_ctl import stop_crawler as halt_crawler
+from database_ctl import apply_pending_migrations
+from database_ctl import database_status
+from database_ctl import migration_status
+from database_ctl import start_database as launch_database
+from database_ctl import stop_database as halt_database
 
 BACKEND_URL = os.getenv(
     "CRAWLER_BACKEND_URL",
@@ -61,6 +66,36 @@ async def stop_crawler() -> dict:
 
 
 @mcp.tool
+async def get_database_status() -> dict:
+    """Report whether embedded Postgres is accepting connections."""
+    return database_status()
+
+
+@mcp.tool
+async def start_database() -> dict:
+    """Start embedded Postgres if it is not already listening."""
+    return launch_database()
+
+
+@mcp.tool
+async def stop_database() -> dict:
+    """Stop the embedded Postgres process."""
+    return halt_database()
+
+
+@mcp.tool
+async def get_migration_status() -> dict:
+    """List database migrations that are applied and migrations that are still pending."""
+    return migration_status()
+
+
+@mcp.tool
+async def apply_migrations() -> dict:
+    """Apply pending SQL migrations. Uses the live database when it is running."""
+    return apply_pending_migrations()
+
+
+@mcp.tool
 async def start_crawl(urls: list[str], callback_url: str = CALLBACK_URL) -> dict:
     """Submit up to 25 HTTP(S) URLs for asynchronous crawling."""
     if not urls:
@@ -104,6 +139,51 @@ async def get_crawl_results(limit: int = 20) -> dict:
         items = payload.get("items", [])
         return {"count": len(items[:limit]), "items": items[:limit]}
     except (httpx.HTTPError, ValueError) as exc:
+        return {"error": str(exc), "backend_url": BACKEND_URL}
+
+
+@mcp.tool
+async def parse_screenshot(url: str | None = None) -> dict:
+    """Parse the newest crawl screenshot with Cohere and store embedded chunks. Pass a URL to parse that page."""
+    body: dict[str, str] = {}
+    if url:
+        body["url"] = _validate_http_url(url, "url")
+
+    try:
+        async with httpx.AsyncClient(timeout=540) as client:
+            response = await client.post(f"{BACKEND_URL}/api/parse", json=body)
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {"error": response.text}
+        if response.status_code >= 400:
+            detail = payload.get("error") if isinstance(payload, dict) else payload
+            return {"error": detail or f"Parse failed ({response.status_code})"}
+        return payload if isinstance(payload, dict) else {"error": "Parse returned an unexpected response"}
+    except httpx.HTTPError as exc:
+        return {"error": str(exc), "backend_url": BACKEND_URL}
+
+
+@mcp.tool
+async def get_app_logs(limit: int = 20, level: str | None = None) -> dict:
+    """Return recent crawler log rows. level can be debug, info, warn, or error."""
+    if not 1 <= limit <= 200:
+        raise ValueError("limit must be between 1 and 200")
+    params: dict[str, str | int] = {"limit": limit}
+    if level:
+        params["level"] = level
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{BACKEND_URL}/api/logs", params=params)
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {"error": response.text}
+        if response.status_code >= 400:
+            detail = payload.get("error") if isinstance(payload, dict) else payload
+            return {"error": detail or f"Logs failed ({response.status_code})"}
+        return payload if isinstance(payload, dict) else {"error": "Logs returned an unexpected response"}
+    except httpx.HTTPError as exc:
         return {"error": str(exc), "backend_url": BACKEND_URL}
 
 

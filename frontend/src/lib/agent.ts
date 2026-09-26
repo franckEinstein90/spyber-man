@@ -3,6 +3,7 @@ export interface StoredCrawl {
   title: string
   excerpt: string
   screenshotFile: string | null
+  parsedMarkdown?: string | null
   error: string | null
   timestamp: string
 }
@@ -86,10 +87,93 @@ async function waitForCrawls(urls: string[], since: number): Promise<StoredCrawl
         title: "",
         excerpt: "",
         screenshotFile: null,
+        parsedMarkdown: null,
         error: "Timed out waiting for this page.",
         timestamp: new Date().toISOString(),
       },
   )
+}
+
+function mentionsDatabase(text: string): boolean {
+  return /\b(database|postgres|postgresql)\b/i.test(text)
+}
+
+function asksToStopDatabase(text: string): boolean {
+  return mentionsDatabase(text)
+    && /\b(stop|shut\s*down|shutdown|kill|turn\s+off|switch\s+off)\b/i.test(text)
+}
+
+function asksToStartDatabase(text: string): boolean {
+  return mentionsDatabase(text)
+    && /\b(start|launch|boot|turn\s+on|switch\s+on|bring\s+up|spin\s+up)\b/i.test(text)
+}
+
+function asksForDatabaseStatus(text: string): boolean {
+  if (!mentionsDatabase(text)) return false
+  const aboutState = /\b(status|running|alive|reachable|health|up|down|stopped)\b/i.test(text)
+  const runningQuestion = /\b(is|are)\b[\s\S]{0,48}\b(running|up|down|alive|stopped)\b/i.test(text)
+  return aboutState || runningQuestion
+}
+
+function asksToApplyMigrations(text: string): boolean {
+  return (/\b(apply|run|execute)\b/i.test(text) && /\bmigrations?\b/i.test(text))
+    || /\bmigrate\b/i.test(text)
+}
+
+function asksToCheckMigrations(text: string): boolean {
+  if (!/\bmigrations?\b/i.test(text)) return false
+  return /\b(pending|needed|need|missing|status|check|any|unapplied|outstanding|applied)\b/i.test(text)
+}
+
+function databaseAddress(result: Record<string, unknown>): string {
+  const host = typeof result.host === "string" ? result.host : "127.0.0.1"
+  const port = typeof result.port === "number" ? result.port : 5432
+  return `${host}:${port}`
+}
+
+function fileList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function describeMigrations(result: Record<string, unknown>, appliedNow = false): string {
+  if (result.ok === false) return errorText(result.error ?? result)
+  const pending = fileList(result.pending)
+  const executed = fileList(result.executed)
+  const applied = fileList(result.applied)
+  const where = result.running === true
+    ? "The database is running."
+    : "The database is stopped, so this was read from the data files."
+  if (appliedNow) {
+    if (executed.length === 0) return `${where} There were no pending migrations.`
+    const target = result.running === true ? "on the running database" : "to the data files"
+    return `Applied ${executed.join(", ")} ${target}.`
+  }
+  if (pending.length === 0) {
+    return `${where} No migrations are pending. ${applied.length} already applied.`
+  }
+  return `${where} ${pending.length} migration${pending.length === 1 ? "" : "s"} still need to be applied: ${pending.join(", ")}.`
+}
+
+function asksForLogs(text: string): boolean {
+  return /\b(logs?|observability)\b/i.test(text)
+    || /\b(what went wrong|recent errors|show errors)\b/i.test(text)
+    || /\bwhy did\b/i.test(text)
+}
+
+function explainToolFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes("-32001") || /request timed out/i.test(message)) {
+    return "That request timed out before the crawler finished. Parsing a full-page screenshot can take several minutes. Say \"show the logs\" to see how far it got."
+  }
+  return message
+}
+
+function asksToParse(text: string): boolean {
+  return /\b(parse|parsed|parsing|cohere)\b/i.test(text)
+}
+
+function asksToOpenPage(text: string): boolean {
+  return /\b(crawl|open|visit|browse|fetch|scrape|navigate)\b/i.test(text)
 }
 
 function asksToStopService(text: string): boolean {
@@ -123,11 +207,25 @@ function describeStatus(result: Record<string, unknown>): string {
   return "No. The web crawler is not running."
 }
 
+function asStoredCrawl(value: Record<string, unknown>): StoredCrawl | null {
+  if (typeof value.url !== "string") return null
+  return {
+    url: value.url,
+    title: typeof value.title === "string" ? value.title : "",
+    excerpt: typeof value.excerpt === "string" ? value.excerpt : "",
+    screenshotFile: typeof value.screenshotFile === "string" ? value.screenshotFile : null,
+    parsedMarkdown: typeof value.parsedMarkdown === "string" ? value.parsedMarkdown : null,
+    error: typeof value.error === "string" ? value.error : null,
+    timestamp: typeof value.timestamp === "string" ? value.timestamp : new Date().toISOString(),
+  }
+}
+
 function summarizeCaptures(items: StoredCrawl[]): string {
   return items
     .map((item) => {
       if (item.error) return `${item.url} did not capture. ${item.error}`
       const title = item.title || "The page"
+      if (item.parsedMarkdown) return `${title} is below, with the screenshot and the parsed page.`
       if (item.screenshotFile) return `${title} is below, with the screenshot.`
       return `${title} came back without a screenshot.`
     })
@@ -166,10 +264,111 @@ export async function instructAgent(
 
   const urls = extractUrls(instruction)
   const wantsSummary = /\bsummar/i.test(instruction)
+  const wantsParse = asksToParse(instruction)
+  const wantsCrawl = urls.length > 0 && (!wantsParse || asksToOpenPage(instruction))
   const stopService = asksToStopService(instruction)
   const startService = asksToStartService(instruction)
 
+  const ensureCrawler = async (): Promise<boolean> => {
+    const health = asRecord(await runTool("get_crawler_status", "backend process", {}))
+    if (health.running === true) return true
+    addText("The web crawler is stopped, so I'll start it first.")
+    const startedService = asRecord(await runTool("start_crawler", "backend process", {}))
+    if (startedService.running === true) return true
+    addText(errorText(startedService.error ?? startedService))
+    return false
+  }
+
+  const parseCaptures = async (targets: string[]): Promise<void> => {
+    const parsed: StoredCrawl[] = []
+    const notes: string[] = []
+    const labels = targets.length > 0 ? targets : [undefined]
+    for (const target of labels) {
+      const detail = target ?? "latest screenshot"
+      const args = target ? { url: target } : {}
+      const result = asRecord(await runTool("parse_screenshot", detail, args))
+      if (typeof result.error === "string") {
+        addText(result.error)
+        continue
+      }
+      const item = asStoredCrawl(result)
+      if (!item) {
+        addText("Parse finished without a screenshot to show.")
+        continue
+      }
+      parsed.push(item)
+      const count = typeof result.ragChunks === "number" ? result.ragChunks : 0
+      if (typeof result.ragError === "string" && result.ragError) {
+        notes.push(result.ragError)
+      } else if (count > 0) {
+        notes.push(
+          `Stored ${count} chunk${count === 1 ? "" : "s"} from ${item.url} with embeddings.`,
+        )
+      }
+    }
+    if (parsed.length === 0) return
+    addText(
+      parsed.length === 1
+        ? "The parsed page is below, next to the screenshot."
+        : "The parsed pages are below, next to each screenshot.",
+    )
+    parts.push({ type: "captures", items: parsed })
+    show()
+    if (notes.length > 0) addText(notes.join(" "))
+  }
+
   try {
+    if (asksToApplyMigrations(instruction)) {
+      addText("I'll apply pending database migrations.")
+      const result = asRecord(await runTool("apply_migrations", "sql migrations", {}))
+      addText(describeMigrations(result, true))
+      return
+    }
+
+    if (asksToCheckMigrations(instruction)) {
+      addText("I'll check for database migrations that have not been applied.")
+      const result = asRecord(await runTool("get_migration_status", "sql migrations", {}))
+      addText(describeMigrations(result))
+      return
+    }
+
+    if (asksToStopDatabase(instruction)) {
+      addText("I'll stop the database.")
+      const result = asRecord(await runTool("stop_database", "embedded postgres", {}))
+      if (result.already_stopped === true) {
+        addText("The database was already stopped.")
+      } else if (result.running === false) {
+        addText("The database is stopped.")
+      } else {
+        addText(errorText(result.error ?? result))
+      }
+      return
+    }
+
+    if (urls.length === 0 && asksToStartDatabase(instruction)) {
+      addText("I'll start the database.")
+      const result = asRecord(await runTool("start_database", "embedded postgres", {}))
+      if (result.running === true && result.already_running === true) {
+        addText(`The database is already running on ${databaseAddress(result)}.`)
+      } else if (result.running === true) {
+        addText(`The database is running on ${databaseAddress(result)}.`)
+      } else {
+        addText(errorText(result.error ?? result))
+      }
+      return
+    }
+
+    if (urls.length === 0 && asksForDatabaseStatus(instruction)) {
+      addText("I'll check whether the database is running.")
+      const result = asRecord(await runTool("get_database_status", "embedded postgres", {}))
+      if (result.running === true) {
+        addText(`Yes. The database is running on ${databaseAddress(result)}.`)
+      } else {
+        addText(`No. The database is not running on ${databaseAddress(result)}.`)
+      }
+      return
+    }
+
     if (stopService) {
       addText("I'll stop the web crawler.")
       const result = asRecord(await runTool("stop_crawler", "backend process", {}))
@@ -203,6 +402,31 @@ export async function instructAgent(
       return
     }
 
+    if (asksForLogs(instruction)) {
+      addText("I'll read the recent crawler logs.")
+      const result = asRecord(await runTool("get_app_logs", "app_logs", { limit: 20 }))
+      if (typeof result.error === "string") {
+        addText(result.error)
+        return
+      }
+      const items = Array.isArray(result.items) ? result.items : []
+      if (items.length === 0) {
+        addText("No log entries are stored yet.")
+        return
+      }
+      const lines = items.slice(0, 20).map((item) => {
+        const row = asRecord(item)
+        const when = typeof row.logged_at === "string" ? row.logged_at.replace("T", " ").slice(0, 19) : ""
+        const level = typeof row.level === "string" ? row.level : "info"
+        const event = typeof row.event === "string" ? row.event : "event"
+        const message = typeof row.message === "string" ? row.message : ""
+        const duration = typeof row.duration_ms === "number" ? ` (${Math.round(row.duration_ms / 1000)}s)` : ""
+        return `${when} ${level} ${event}${duration}: ${message}`
+      })
+      addText(lines.join("\n"))
+      return
+    }
+
     if (urls.length === 0 && wantsSummary) {
       addText("I'll ask the MCP server to summarize that text.")
       const result = asRecord(await runTool("summarize_text", "supplied text", { text: instruction }))
@@ -214,22 +438,25 @@ export async function instructAgent(
       return
     }
 
+    if (wantsParse && !wantsCrawl) {
+      addText(
+        urls.length === 1
+          ? `I'll parse the screenshot from ${urls[0]}.`
+          : "I'll parse the latest screenshot.",
+      )
+      if (!(await ensureCrawler())) return
+      await parseCaptures(urls)
+      return
+    }
+
     if (urls.length === 0) {
       addText(
-        "I can start the web crawler, stop it, or tell you if it is running. I can also crawl pages, for example: crawl https://example.com and show the screenshot.",
+        "I can start or stop the web crawler and the database, check whether migrations are pending, and apply them. I can crawl a page and show the screenshot, then parse that screenshot if you ask. For example: crawl https://example.com.",
       )
       return
     }
 
-    const health = asRecord(await runTool("get_crawler_status", "backend process", {}))
-    if (health.running !== true) {
-      addText("The web crawler is stopped, so I'll start it before opening those pages.")
-      const startedService = asRecord(await runTool("start_crawler", "backend process", {}))
-      if (startedService.running !== true) {
-        addText(errorText(startedService.error ?? startedService))
-        return
-      }
-    }
+    if (!(await ensureCrawler())) return
 
     addText(
       urls.length === 1
@@ -266,9 +493,21 @@ export async function instructAgent(
     parts.push({ type: "captures", items })
     show()
 
+    if (wantsParse) {
+      const ready = items.filter((item) => item.screenshotFile && !item.error).map((item) => item.url)
+      if (ready.length === 0) {
+        addText("There is no screenshot to parse.")
+      } else {
+        addText(ready.length === 1 ? "I'll parse that screenshot next." : "I'll parse those screenshots next.")
+        await parseCaptures(ready)
+      }
+    } else if (items.some((item) => item.screenshotFile && !item.error)) {
+      addText('Say "parse the screenshot" if you want that image turned into markdown.')
+    }
+
     if (wantsSummary) {
       const source = items
-        .map((item) => [item.title, item.excerpt].filter(Boolean).join("\n"))
+        .map((item) => [item.title, item.parsedMarkdown || item.excerpt].filter(Boolean).join("\n"))
         .filter(Boolean)
         .join("\n\n")
       if (!source) {
@@ -282,6 +521,6 @@ export async function instructAgent(
     for (const part of parts) {
       if (part.type === "tool" && part.state === "running") part.state = "error"
     }
-    addText(error instanceof Error ? error.message : String(error))
+    addText(explainToolFailure(error))
   }
 }

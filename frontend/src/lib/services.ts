@@ -35,6 +35,14 @@ const monitoredServices: MonitoredService[] = [
       return result.running === true
     },
   },
+  {
+    id: "database",
+    label: "Database",
+    check: async () => {
+      const result = await readTool("get_database_status")
+      return result.running === true
+    },
+  },
 ]
 
 export function initialServiceSnapshots(): ServiceSnapshot[] {
