@@ -5,13 +5,13 @@
 - Node.js runtime compatible with TypeScript target/build output.
 - Chromium runtime dependencies required by Puppeteer.
 - Writable filesystem paths:
-  - `back-end/data/` (SQLite file)
-  - `back-end/screenGrabs/` (screenshots)
+  - `data/pgdata` (embedded Postgres files)
+  - `webcrawler/screenGrabs/` (screenshots)
 
 ## Backend Local Run
 
 ```bash
-cd back-end
+cd webcrawler
 npm install
 npm run dev
 ```
@@ -23,51 +23,63 @@ npm run build
 npm start
 ```
 
-## Frontend Sample Local Run
+## Chat
 
 ```bash
-cd front-end-sample-one
-uv sync
-uv run python api.py
-# in second terminal
-uv run streamlit run app.py
+cd frontend
+npm install
+npm run dev
 ```
+
+Chat URL: `http://localhost:5173`
+
+The dev server starts `mcp/server.py` and proxies `/api` and `/screengrabs` to port 3000. Ask the chat to start the crawler if port 3000 is down.
+
+Set `PUPPETEER_CACHE_DIR` to `~/.cache/puppeteer` when Chrome is installed there and the crawler cannot find it.
+
+## MCP server
+
+The chat launches this. To run it for another client:
+
+```bash
+cd mcp
+uv sync
+uv run server.py
+```
+
+`start_crawler` and `stop_crawler` control the `webcrawler` process. See `documentation/mcp-server.md`.
 
 ## Networking Expectations
 
-- Streamlit client must reach backend at `http://localhost:3000`.
-- Backend must reach callback endpoint (default `http://localhost:8000/api/crawl-results`).
-- Callback URL must be reachable from backend host (important in container/cloud deployments).
+- The chat reaches the crawler at `http://localhost:3000`.
+- Crawl callbacks default to `http://localhost:3000/api/crawl-results` on the crawler itself.
+- A custom callback URL must be reachable from the crawler host.
 
 ## Logging and Observability
 
-### Current state
-
-- Backend logs via Winston to console.
-- Callback failures currently also write via `console.error` in `processEvents`.
-- No request IDs/correlation IDs.
-- No metrics endpoint.
-
-### Recommended operational upgrades
-
-- Standardize logger usage (remove `console.error`, keep structured logs).
-- Add correlation ID middleware and include IDs in callback payload/logs.
-- Expose Prometheus-style metrics for:
-  - crawl job count
-  - callback success/failure
-  - average crawl duration
+- Backend logs via Winston to the console.
+- Parse steps and callback failures are also inserted into `app_logs` (level, source, event, message, url, duration). Read them with `GET /api/logs` or by asking the chat to show the logs.
+- `psql` with `PGSSLMODE=disable`: `SELECT logged_at, level, event, message FROM app_logs ORDER BY id DESC LIMIT 20;`
+- There is no metrics endpoint and no request-correlation id yet.
 
 ## Data Operations
 
-### SQLite maintenance
+### Postgres
 
-DB file path: `back-end/data/spyber.sqlite3`
-
-Useful quick checks:
+The crawler starts embedded Postgres when `POSTGRES_PORT` is not already open. You can also start it yourself:
 
 ```bash
-sqlite3 back-end/data/spyber.sqlite3 ".tables"
-sqlite3 back-end/data/spyber.sqlite3 "SELECT COUNT(*) FROM link_visits;"
+cd data
+npm install
+npm run dev
+```
+
+Useful checks, with `PGSSLMODE=disable`:
+
+```bash
+psql "postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT:-5432}/postgres" -c '\dt'
+psql "postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT:-5432}/postgres" -c '\dt rag.*'
+psql "postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT:-5432}/postgres" -c 'SELECT COUNT(*) FROM link_visits;'
 ```
 
 ### Screenshot management

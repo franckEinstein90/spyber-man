@@ -7,19 +7,22 @@
 ├── LICENSE
 ├── README.md
 ├── documentation/
-├── back-end/
-└── front-end-sample-one/
+├── webcrawler/
+├── data/
+├── frontend/
+└── mcp/
 ```
 
 ## Component Summary
 
-### 1) `back-end/` (TypeScript service)
+### 1) `webcrawler/` (TypeScript service)
 
 Purpose:
 - Exposes crawl initiation endpoint.
-- Runs Puppeteer crawler jobs.
+- Runs Puppeteer crawler jobs and writes full-page screenshots.
 - Sends asynchronous callback payloads for each crawled URL.
-- Persists crawl execution metadata in SQLite.
+- Keeps a short in-memory list of recent titles, excerpts, and screenshot file names.
+- Persists crawl execution metadata in embedded Postgres.
 - Hosts a basic dashboard page and Socket.IO server.
 
 Core technologies:
@@ -27,41 +30,63 @@ Core technologies:
 - Socket.IO
 - Puppeteer
 - AJV (request validation)
-- better-sqlite3
+- pg (client for the embedded Postgres in `data/`)
 - Winston
 
-### 2) `front-end-sample-one/` (Python local integration sample)
+### 2) `data/` (embedded Postgres)
 
 Purpose:
-- Provides a Streamlit UI to submit crawl requests.
-- Provides a FastAPI service that receives callbacks from backend.
-- Serves as a test harness / local integration target.
+- Runs PGlite, an embedded Postgres, on `POSTGRES_PORT` from the repo-root `.env`.
+- Loads the pgvector extension and applies `data/migrations/*.sql` on startup.
+- Stores database files in `data/pgdata`.
 
 Core technologies:
-- FastAPI
-- Streamlit
-- Pydantic
-- Requests
-- Uvicorn
+- PGlite
+- pgvector
 
-### 3) `documentation/`
+### 3) `frontend/` (chat UI)
+
+Purpose:
+- Chat for crawl instructions and for starting, stopping, and checking the web crawler.
+- Collapsible sidebar with the web crawler and the database.
+
+Core technologies:
+- Vite
+- React
+- shadcn/ui
+- Tailwind CSS
+
+### 4) `mcp/` (MCP server)
+
+Purpose:
+- stdio tools the chat calls: crawler and database control, crawl, parse a screenshot, recent results, logs, and optional text summary.
+- Starts and stops the `webcrawler` and `data` processes on the local machine.
+
+Core technologies:
+- Python
+- FastMCP
+- httpx
+
+### 5) `documentation/`
 
 Purpose:
 - Repository-wide documentation for architecture, APIs, operations, and debt tracking.
 
 ## Runtime Interaction Model
 
-1. User enters URLs in Streamlit (`front-end-sample-one/app.py`).
-2. Streamlit sends `POST /api/process-events` to Node backend (`back-end`).
-3. Node backend validates payload and crawls each URL.
-4. For each URL, backend pushes result to provided callback URL (typically `front-end-sample-one/api.py:/api/crawl-results`).
-5. Backend logs visit/callback status into SQLite database.
+1. User instructs the chat (`frontend/`, port 5173).
+2. The chat calls MCP tools (`mcp/server.py`) over stdio.
+3. `start_crawl` posts `POST /api/process-events` to `webcrawler` (port 3000).
+4. The crawler visits each URL, writes a PNG under `screenGrabs/`, stores a short result in memory, and POSTs the full result to the callback URL.
+5. The chat polls `get_crawl_results` and shows the title, excerpt, and screenshot. Parsing is a later request: `parse_screenshot` posts `POST /api/parse`, which calls Cohere and writes embedded chunks to `rag.chunks`.
+6. `start_crawler` and `stop_crawler` start or stop the Node process. `start_database` and `stop_database` do the same for embedded Postgres. The sidebar polls both status tools.
+7. `get_app_logs` reads `app_logs`, which records parse steps and callback failures.
 
 ## Data Artifacts Produced
 
-- **Screenshots**: backend writes PNG files under `back-end/screenGrabs/`.
-- **SQLite DB**: backend writes crawl records to `back-end/data/spyber.sqlite3`.
-- **In-memory callback store**: frontend FastAPI keeps callback payloads in process memory (`received_crawl_results`).
+- **Screenshots**: backend writes PNG files under `webcrawler/screenGrabs/`.
+- **Postgres**: embedded database files live in `data/pgdata`. Migrations are in `data/migrations`. The server listens on `POSTGRES_PORT`. Crawl visits are in `link_visits`. Parsed text is chunked into `rag.chunks` with `text-embedding-ada-002` vectors. Operational events are in `app_logs`.
+- **In-memory crawl results**: `webcrawler` keeps recent titles, excerpts, screenshot names, and parsed markdown for `GET /api/crawl-results`. That list does not survive a restart.
 
 ## Repository-level Risks
 

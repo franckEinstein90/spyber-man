@@ -10,12 +10,12 @@
         "-r",
         "ts-node/register"
       ],
-      "args": ["${workspaceFolder}/back-end/main.ts"],
-      "cwd": "${workspaceFolder}/back-end",
+      "args": ["${workspaceFolder}/webcrawler/main.ts"],
+      "cwd": "${workspaceFolder}/webcrawler",
       "envFile": "${workspaceFolder}/.env",
       "env": {
         "NODE_ENV": "development",
-        "TS_NODE_PROJECT": "${workspaceFolder}/back-end/tsconfig.json"
+        "TS_NODE_PROJECT": "${workspaceFolder}/webcrawler/tsconfig.json"
       },
       "sourceMaps": true,
       "skipFiles": ["<node_internals>/**"],
@@ -23,12 +23,12 @@
       "internalConsoleOptions": "neverOpen"
     },
     {
-      "name": "Front-End",
+      "name": "Chat",
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "cwd": "${workspaceFolder}/front-end",
+      "cwd": "${workspaceFolder}/frontend",
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
@@ -37,7 +37,7 @@
   "compounds": [
     {
       "name": "Spyber Man: Full Stack",
-      "configurations": ["Backend", "Front-End"],
+      "configurations": ["Backend", "Chat"],
       "stopAll": true,
       "presentation": {
         "group": "spyber",

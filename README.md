@@ -1,72 +1,60 @@
 # Spyber Man
 
-This repository contains two runnable applications that work together:
+Spyber Man is a local web crawler you instruct from a chat.
 
-1. **`back-end/`**: A TypeScript/Node.js crawler service (Express + Socket.IO + Puppeteer + SQLite).
-2. **`front-end/`**: A Vite + React + TypeScript UI with a local Express callback receiver.
+1. **`webcrawler/`** — TypeScript crawler (Express, Socket.IO, Puppeteer).
+2. **`data/`** — embedded Postgres with pgvector. SQL migrations live in `data/migrations`.
+3. **`frontend/`** — Vite, React, and shadcn chat. The sidebar shows which services are running.
+4. **`mcp/`** — FastMCP server the chat uses to crawl, parse screenshots, read logs, and start or stop the crawler and the database.
 
-A documentation set lives under **`documentation/`**.
+## Documentation
 
-## Documentation Index
+- `documentation/README.md` — reading order.
+- `documentation/repo-overview.md` — folders and how the pieces talk to each other.
+- `documentation/frontend.md` — chat UI.
+- `documentation/mcp-server.md` — MCP tools, including start, stop, and status.
+- `documentation/backend-architecture.md` — crawler internals.
+- `documentation/backend-api-reference.md` — HTTP contract.
+- `documentation/deployment-and-operations.md` — how to run it.
+- `documentation/todos-and-technical-debt.md` — known gaps.
 
-- `documentation/README.md` — documentation map and reading order.
-- `documentation/repo-overview.md` — repository structure and component map.
-- `documentation/backend-architecture.md` — backend architecture and runtime behavior.
-- `documentation/backend-api-reference.md` — API contract (`POST /api/crawls` and the `/api/process-events` alias).
-- `documentation/deployment-and-operations.md` — environment setup, runbooks, and observability notes.
-- `documentation/todos-and-technical-debt.md` — prioritized TODOs and technical debt inventory.
+## Quick start
 
-## Quick Start
-
-Preferred ports are defined in the repo-root `.env` (see `.env.example`):
-
-| Service | Default |
-|---------|---------|
-| Backend | `http://localhost:3000` |
-| Front-end UI | `http://localhost:5173` |
-| Callback receiver | `http://localhost:8000` |
-
-### Option A — VS Code compound launch
-
-1. Copy `.env.example` to `.env` if needed.
-2. Run and Debug → **Spyber Man: Full Stack** (starts backend + front-end together).
-
-### Option B — Terminals
+Run the crawler and the chat. The crawler starts embedded Postgres on `POSTGRES_PORT` when it is not already listening. The chat starts the MCP server for you.
 
 ```bash
-# Terminal 1 — backend
-cd back-end
-npm install          # also installs Puppeteer's Chrome via postinstall
+# Terminal 1 — crawler
+cd webcrawler
+npm install
 npm run dev
 
-# Terminal 2 — front-end (Vite UI + callback receiver)
-cd front-end
+# Terminal 2 — chat
+cd frontend
 npm install
 npm run dev
 ```
 
-- UI: http://localhost:5173
-- Backend monitor (read-only live activity): http://localhost:3000
-- Callback API: http://localhost:8000
+| Service | URL |
+|---|---|
+| Chat | http://localhost:5173 |
+| Web crawler | http://localhost:3000 |
+| Embedded Postgres | `127.0.0.1:5432` |
 
-## Primary Crawl Endpoint
+In the chat you can ask whether the web crawler or the database is running, tell it to start or stop either one, and apply pending migrations. Send one or more `http`/`https` URLs to crawl. Screenshots and page text come back in the thread. Parsing is separate: say `parse the screenshot` to send the latest image to Cohere and store the markdown as embedded chunks. Say `show the logs` to read `app_logs`.
 
-- **Preferred path**: `POST /api/crawls`
-- **Alias** (backward compatible): `POST /api/process-events`
-- **Service**: `back-end`
-- **Purpose**: Accept crawl targets and callback URLs, crawl asynchronously (bounded concurrency), POST results to each callback URL, and broadcast live activity over Socket.IO to the monitor dashboard.
+`COHERE_API_KEY` is required to parse. `OPENAI_API_KEY` is required for those embeddings and for text summaries. Both belong in the repo-root `.env`. See `.env.example`.
 
-Example payload:
+Puppeteer looks for Chrome under `~/.cache/puppeteer`. If a crawl fails because Chrome is missing, set `PUPPETEER_CACHE_DIR` to that directory before starting `webcrawler`.
 
-```json
-{
-  "urls": [
-    {
-      "url": "https://example.com",
-      "callbackUrl": "http://localhost:8000/api/crawl-results"
-    }
-  ]
-}
-```
+## Crawl endpoint
 
-See `documentation/backend-api-reference.md` and `front-end/README.md` for full request/response details, validation rules, and local callback inspection.
+- **Method**: `POST`
+- **Preferred path**: `/api/crawls`
+- **Alias**: `/api/process-events`
+- **Service**: `webcrawler`
+- Recent results: `GET /api/crawl-results`
+- Parse a stored screenshot: `POST /api/parse`
+- Crawler logs: `GET /api/logs`
+- Screenshots: `GET /screengrabs/<file>.png` and `GET /screenGrabs/<file>.png`
+
+The chat does not call that endpoint directly. It calls the MCP tools in `mcp/`, which call the crawler.
