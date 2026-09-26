@@ -37,7 +37,7 @@ npm start
   "urls": [
     {
       "url": "https://www.python.org",
-      "callbackUrl": "http://localhost:8000/api/crawl-results"
+      "callbackUrl": "http://localhost:3000/api/crawl-results"
     }
   ]
 }
@@ -60,7 +60,7 @@ npm start
     "urls": [
       {
         "url": "https://www.python.org",
-        "callbackUrl": "http://localhost:8000/api/crawl-results"
+        "callbackUrl": "http://localhost:3000/api/crawl-results"
       }
     ]
   }
@@ -96,7 +96,7 @@ After crawling each URL, backend POSTs to that target's callback URL:
     "screenshotFile": "www.python.org-1710000000000.png",
     "error": null
   },
-  "callbackUrl": "http://localhost:8000/api/crawl-results",
+  "callbackUrl": "http://localhost:3000/api/crawl-results",
   "receivedAt": "2026-04-16T00:00:00.000Z"
 }
 ```

@@ -26,7 +26,7 @@ Accept a list of crawl targets and callback destinations. The backend starts asy
   "urls": [
     {
       "url": "https://example.com",
-      "callbackUrl": "http://localhost:8000/api/crawl-results"
+      "callbackUrl": "http://localhost:3000/api/crawl-results"
     }
   ]
 }
@@ -49,7 +49,7 @@ Status: `200 OK`
     "urls": [
       {
         "url": "https://example.com",
-        "callbackUrl": "http://localhost:8000/api/crawl-results"
+        "callbackUrl": "http://localhost:3000/api/crawl-results"
       }
     ]
   }
@@ -146,7 +146,7 @@ For each target URL, backend performs `POST <callbackUrl>` with JSON payload:
     "screenshotFile": "example.com-1710000000000.png",
     "error": null
   },
-  "callbackUrl": "http://localhost:8000/api/crawl-results",
+  "callbackUrl": "http://localhost:3000/api/crawl-results",
   "receivedAt": "2026-04-16T00:00:00.000Z"
 }
 ```
@@ -167,11 +167,11 @@ curl -X POST http://localhost:3000/api/process-events \
     "urls": [
       {
         "url": "https://www.python.org",
-        "callbackUrl": "http://localhost:8000/api/crawl-results"
+        "callbackUrl": "http://localhost:3000/api/crawl-results"
       },
       {
         "url": "https://news.ycombinator.com",
-        "callbackUrl": "http://localhost:8000/api/crawl-results"
+        "callbackUrl": "http://localhost:3000/api/crawl-results"
       }
     ]
   }'

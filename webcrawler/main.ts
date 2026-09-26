@@ -82,7 +82,7 @@ function extractPort(payload: unknown): number | undefined {
 
 loadWorkspaceEnv();
 
-const DEFAULT_PORT = parsePort(process.env.PORT, 3000);
+const DEFAULT_PORT = parsePort(process.env.BACKEND_PORT, parsePort(process.env.PORT, 3000));
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',

@@ -14,7 +14,10 @@ LOG_FILE = RUNTIME_DIR / "crawler.log"
 
 
 def _backend_url() -> str:
-    return os.getenv("CRAWLER_BACKEND_URL", "http://localhost:3000").rstrip("/")
+    return os.getenv(
+        "CRAWLER_BACKEND_URL",
+        f"http://localhost:{os.getenv('BACKEND_PORT', '3000')}",
+    ).rstrip("/")
 
 
 def _probe() -> tuple[bool, int | None, str | None]:
@@ -157,7 +160,8 @@ def start_crawler() -> dict:
     status["started"] = bool(status["running"])
     status["already_running"] = False
     if not status["running"]:
-        status["error"] = status.get("error") or "The crawler process started but did not open its port."
+        detail = status.get("log_tail") or status.get("error") or "The crawler process started but did not open its port."
+        status["error"] = f"The web crawler did not stay up.\n{detail}"
     return status
 
 

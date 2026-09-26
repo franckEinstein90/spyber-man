@@ -87,7 +87,7 @@ Callback payload shape currently sent by backend:
     "screenshotFile": "example.com-1710000000000.png",
     "error": null
   },
-  "callbackUrl": "http://localhost:8000/api/crawl-results",
+  "callbackUrl": "http://localhost:3000/api/crawl-results",
   "receivedAt": "2026-04-16T00:00:00.000Z"
 }
 ```

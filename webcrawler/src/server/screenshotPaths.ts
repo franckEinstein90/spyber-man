@@ -22,7 +22,7 @@ export function getPublicBaseUrl(): string {
   if (process.env.PUBLIC_BASE_URL) {
     return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
   }
-  const port = process.env.PORT || process.env.BACKEND_PORT || '3000';
+  const port = process.env.BACKEND_PORT || process.env.PORT || '3000';
   return `http://localhost:${port}`;
 }
 

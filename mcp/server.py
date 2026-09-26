@@ -16,9 +16,13 @@ from crawler_ctl import crawler_status
 from crawler_ctl import start_crawler as launch_crawler
 from crawler_ctl import stop_crawler as halt_crawler
 
-BACKEND_URL = os.getenv("CRAWLER_BACKEND_URL", "http://localhost:3000").rstrip("/")
+BACKEND_URL = os.getenv(
+    "CRAWLER_BACKEND_URL",
+    f"http://localhost:{os.getenv('BACKEND_PORT', '3000')}",
+).rstrip("/")
 CALLBACK_URL = os.getenv(
-    "CRAWL_CALLBACK_URL", "http://localhost:8000/api/crawl-results"
+    "CRAWL_CALLBACK_URL",
+    f"http://localhost:{os.getenv('BACKEND_PORT', '3000')}/api/crawl-results",
 )
 mcp = FastMCP("Cyber Crawler")
 
