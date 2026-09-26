@@ -5,6 +5,7 @@ export interface StoredCrawlResult {
   title: string;
   excerpt: string;
   screenshotFile: string | null;
+  parsedMarkdown: string | null;
   error: string | null;
   timestamp: string;
 }
@@ -29,6 +30,7 @@ export function rememberCrawl(result: CrawlResult): StoredCrawlResult {
     title: result.title,
     excerpt: excerptFromHtml(result.html),
     screenshotFile: result.screenshotFile ?? null,
+    parsedMarkdown: result.parsedMarkdown ?? null,
     error: result.error ?? null,
     timestamp: result.timestamp instanceof Date ? result.timestamp.toISOString() : new Date(result.timestamp).toISOString(),
   };
@@ -43,4 +45,22 @@ export function rememberCrawl(result: CrawlResult): StoredCrawlResult {
 
 export function listCrawlResults(): StoredCrawlResult[] {
   return recent;
+}
+
+/** Newest stored crawl that has a screenshot, optionally for one URL. */
+export function findLatestCapture(url?: string): StoredCrawlResult | undefined {
+  return recent.find(
+    (item) => Boolean(item.screenshotFile) && !item.error && (!url || item.url === url),
+  );
+}
+
+export function setParsedMarkdown(
+  url: string,
+  screenshotFile: string,
+  markdown: string,
+): StoredCrawlResult | undefined {
+  const item = recent.find((entry) => entry.url === url && entry.screenshotFile === screenshotFile);
+  if (!item) return undefined;
+  item.parsedMarkdown = markdown;
+  return item;
 }

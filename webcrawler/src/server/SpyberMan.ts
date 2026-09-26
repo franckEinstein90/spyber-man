@@ -7,11 +7,12 @@ import path from 'path';
 import fs from 'fs';
 import { processEvents } from './processEvents';
 import { initServerStack } from './initServerStack';
-import { initDatabase } from './database';
+import { initDatabase, listAppLogs, type AppLogLevel } from './database';
 import { createRateLimiter } from './security';
 import { CrawlRequestBody, crawlRequestSchema } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
 import { ComputeEnv } from '../compute/models';
+import { parseRequestedScreenshot } from './parseRequest';
 import { listCrawlResults } from './resultsStore';
 import {
   getScreenshotDirectory,
@@ -152,8 +153,56 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
     initiateCrawl,
   );
 
+  app.get('/api/logs', (req: Request, res: Response) => {
+    const rawLimit = Number.parseInt(String(req.query.limit ?? '50'), 10);
+    const limit = Number.isInteger(rawLimit) ? rawLimit : 50;
+    const rawLevel = typeof req.query.level === 'string' ? req.query.level : undefined;
+    const levels: AppLogLevel[] = ['debug', 'info', 'warn', 'error'];
+    if (rawLevel && !levels.includes(rawLevel as AppLogLevel)) {
+      res.status(400).json({ error: 'level must be debug, info, warn, or error' });
+      return;
+    }
+    if (limit < 1 || limit > 200) {
+      res.status(400).json({ error: 'limit must be between 1 and 200' });
+      return;
+    }
+
+    listAppLogs(limit, rawLevel as AppLogLevel | undefined)
+      .then((items) => {
+        res.json({ items });
+      })
+      .catch((error: unknown) => {
+        res.status(500).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  });
+
   app.get('/api/crawl-results', (_req: Request, res: Response) => {
     res.json({ items: listCrawlResults() });
+  });
+
+  app.post('/api/parse', (req: Request, res: Response) => {
+    const rawUrl = (req.body as { url?: unknown } | undefined)?.url;
+    if (rawUrl != null && typeof rawUrl !== 'string') {
+      res.status(400).json({ error: 'url must be a string' });
+      return;
+    }
+
+    const url = typeof rawUrl === 'string' ? rawUrl : undefined;
+    parseRequestedScreenshot(url)
+      .then((result) => {
+        if ('status' in result) {
+          res.status(result.status).json({ error: result.error });
+          return;
+        }
+        res.json(result);
+      })
+      .catch((error: unknown) => {
+        res.status(500).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
   });
 
   app.post('/api/crawl-results', (_req: Request, res: Response) => {
@@ -182,7 +231,7 @@ export function startSpyberMan(options: SpyberManOptions = {}): void {
       });
     })
     .catch((error) => {
-      logger.error('Unable to initialize local SQLite database:', error);
+      logger.error('Unable to initialize the embedded Postgres database:', error);
       process.exit(1);
     });
 }

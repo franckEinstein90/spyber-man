@@ -20,4 +20,9 @@ export interface CrawlResult {
    * `null` when OCR was skipped/failed or no screenshot exists.
    */
   ocrText?: string | null;
+  /**
+   * Markdown produced by Cohere Parse from the screenshot.
+   * `null` when parsing was skipped or failed.
+   */
+  parsedMarkdown?: string | null;
 }

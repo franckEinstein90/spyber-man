@@ -104,6 +104,7 @@ export class Crawler {
         screenshotFile,
         screenshotUrl: buildScreenshotUrl(filename),
         ocrText,
+        parsedMarkdown: null,
       };
     } catch (error) {
       return {
@@ -116,6 +117,7 @@ export class Crawler {
         screenshotFile: null,
         screenshotUrl: null,
         ocrText: null,
+        parsedMarkdown: null,
       };
     } finally {
       await page.close();

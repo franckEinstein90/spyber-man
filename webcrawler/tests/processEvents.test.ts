@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the database layer so tests never touch SQLite.
+// Mock the database layer so tests never touch Postgres.
 vi.mock('../src/server/database', () => ({
   recordLinkVisit: vi.fn().mockResolvedValue(undefined),
+  recordAppLog: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { recordLinkVisit } from '../src/server/database';

@@ -6,7 +6,7 @@ import {
 } from '../crawler/crawlStages';
 import { CrawlRequestBody } from './models/crawlRequest';
 import { SpyberManCrawlStatus } from './models/SpyberManCrawlStatus';
-import { recordLinkVisit } from './database';
+import { recordAppLog, recordLinkVisit } from './database';
 import { rememberCrawl } from './resultsStore';
 
 const DEFAULT_CONCURRENCY = 3;
@@ -185,6 +185,7 @@ export const processEvents = async (
           screenshotFile: null,
           screenshotUrl: null,
           ocrText: null,
+          parsedMarkdown: null,
         };
       }
       results[index] = crawlResult;
@@ -210,6 +211,13 @@ export const processEvents = async (
         callbackStatus = 'failed';
         callbackError = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to deliver callback for ${target.url}:`, error);
+        await recordAppLog({
+          level: 'error',
+          source: 'crawler',
+          event: 'crawl.callback_failed',
+          message: callbackError.slice(0, 500),
+          url: target.url,
+        });
       }
 
       await recordLinkVisit({
@@ -220,6 +228,7 @@ export const processEvents = async (
         callbackError,
         screenshotUrl: crawlResult.screenshotUrl ?? null,
         ocrText: crawlResult.ocrText ?? null,
+        parsedMarkdown: crawlResult.parsedMarkdown ?? null,
       });
 
       onEvent({

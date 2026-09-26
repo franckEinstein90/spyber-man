@@ -15,6 +15,9 @@ export interface ServerStack {
 export function initServerStack(root: string): ServerStack {
   const app = express();
   const httpServer = createServer(app);
+  // Parsing a full-page screenshot can take several minutes.
+  httpServer.requestTimeout = 600_000;
+  httpServer.headersTimeout = 610_000;
   const io = new SocketIOServer(httpServer);
 
   app.use(applyBasicSecurityHeaders);
