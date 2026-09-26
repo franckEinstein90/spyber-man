@@ -9,13 +9,13 @@ case "$1" in
     ;;
   "app"|"streamlit")
     echo "Starting Streamlit app..."
-    streamlit run app.py
+    python run_streamlit.py
     ;;
   "both")
     echo "Starting both API and Streamlit..."
     python api.py &
     sleep 2
-    streamlit run app.py
+    python run_streamlit.py
     ;;
   *)
     echo "Cyber Crawler - Quick Start"

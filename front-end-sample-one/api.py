@@ -1,8 +1,11 @@
+import logging
+import os
+from datetime import datetime
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
 from models import CrawlCallbackPayload, CrawlRequest
-import logging
-from datetime import datetime
 
 app = FastAPI(title="Cyber Crawler API")
 
@@ -19,6 +22,8 @@ app.add_middleware(
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+API_PORT = int(os.getenv("FRONTEND_SAMPLE_API_PORT", os.getenv("PORT", "8000")))
 
 
 @app.post("/api/process-events")
@@ -81,4 +86,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(app, host="0.0.0.0", port=API_PORT)

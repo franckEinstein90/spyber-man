@@ -26,14 +26,14 @@ api:
 	uv run python api.py
 
 app:
-	uv run streamlit run app.py
+	uv run python run_streamlit.py
 
 both:
 	@echo "Starting API server..."
 	uv run python api.py & \
 	sleep 2; \
 	echo "Starting Streamlit app..."; \
-	uv run streamlit run app.py
+	uv run python run_streamlit.py
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

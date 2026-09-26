@@ -58,7 +58,7 @@ uv run streamlit run app.py
 
 ## Typical integration flow
 
-1. Start Node backend (`../back-end`) on port `3000`.
+1. Start Node backend (`../webcrawler`) on port `3000`.
 2. Start this FastAPI service on port `8000`.
 3. Start Streamlit app on port `8501`.
 4. Submit URLs from Streamlit.

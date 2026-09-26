@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 import requests
 
@@ -6,7 +8,8 @@ st.title("🕷️ Cyber Crawler")
 
 # Configuration
 API_BASE_URL = "http://localhost:3000"
-CALLBACK_URL = "http://localhost:8000/api/crawl-results"
+CALLBACK_PORT = os.getenv("FRONTEND_SAMPLE_API_PORT", os.getenv("PORT", "8000"))
+CALLBACK_URL = f"http://localhost:{CALLBACK_PORT}/api/crawl-results"
 
 SAMPLE_URLS = {
     "Python": ["https://www.python.org"],
@@ -115,7 +118,7 @@ with st.expander("📖 Usage Guide"):
        ```
     2. In another terminal, start Streamlit:
        ```bash
-       streamlit run app.py
+         python run_streamlit.py
        ```
     3. Enter URLs in the text area (one per line)
     4. Click "Send to API" to submit the crawl request
