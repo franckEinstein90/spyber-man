@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowUp, LoaderCircle, PanelLeft, Plus } from "lucide-react"
+import { ArrowLeft, ArrowUp, ImageIcon, Images, Paperclip, PanelLeft, Plus, Settings, X } from "lucide-react"
+import { DropdownMenu } from "radix-ui"
 import { cn } from "@/lib/utils"
 import {
   initialServiceSnapshots,
@@ -7,13 +8,41 @@ import {
   type ServiceHealth,
   type ServiceSnapshot,
 } from "@/lib/services"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  ChatContainerContent,
+  ChatContainerRoot,
+  ChatContainerScrollAnchor,
+} from "@/components/ui/chat-container"
+import { Loader } from "@/components/ui/loader"
+import { Markdown } from "@/components/ui/markdown"
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
+import {
+  PromptInput,
+  PromptInputAction,
+  PromptInputActions,
+  PromptInputTextarea,
+} from "@/components/ui/prompt-input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollButton } from "@/components/ui/scroll-button"
 import { Separator } from "@/components/ui/separator"
-import { Textarea } from "@/components/ui/textarea"
-import { instructAgent, type MessagePart } from "@/lib/agent"
+import { Source, SourceContent, SourceTrigger } from "@/components/ui/source"
+import { Tool, type ToolPart } from "@/components/ui/tool"
+import { SettingsPage } from "@/components/SettingsPage"
+import { instructAgent, parseStoredScreenshot, type ConversationTurn, type MessagePart, type PixelCrop, type StoredCrawl, type ToolState } from "@/lib/agent"
+import { ScreenshotCropDialog } from "@/components/ScreenshotCropDialog"
+import { ImagesPage, type GalleryImage } from "@/components/ImagesPage"
+import { applyThemeMode, readThemeMode, saveThemeMode, type ThemeMode } from "@/lib/theme"
+import {
+  attachmentContext,
+  formatBytes,
+  hasReadableText,
+  isImageFile,
+  MAX_ATTACHMENTS,
+  readStoredAttachment,
+  type DraftAttachment,
+} from "@/lib/attachments"
 
 interface ChatMessage {
   id: string
@@ -49,6 +78,7 @@ const SUGGESTIONS = [
   "Crawl https://example.com and show me the screenshot.",
   "Parse the latest screenshot.",
   "Show the logs.",
+  "What do the stored pages say?",
 ]
 
 function loadConversations(): Conversation[] {
@@ -76,49 +106,112 @@ function screenshotSrc(file: string): string {
   return `/screengrabs/${encodeURIComponent(file)}`
 }
 
-function MessageParts({ parts }: { parts: MessagePart[] }) {
+function sourceUrls(text: string): string[] | null {
+  const match = text.match(/^From\s+(.+)$/s)
+  if (!match) return null
+  const urls = match[1]
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => /^https?:\/\//.test(item))
+  return urls.length > 0 ? urls : null
+}
+
+function toolPartState(state: ToolState): ToolPart["state"] {
+  if (state === "running") return "input-streaming"
+  if (state === "error") return "output-error"
+  return "output-available"
+}
+
+function MessageParts({
+  parts,
+  messageId,
+  onOpenScreenshot,
+}: {
+  parts: MessagePart[]
+  messageId: string
+  onOpenScreenshot: (item: StoredCrawl) => void
+}) {
   return (
     <div className="flex flex-col gap-3">
       {parts.map((part, index) => {
         if (part.type === "text") {
+          const urls = sourceUrls(part.text)
+          if (urls) {
+            return (
+              <div key={index} className="flex flex-wrap gap-2">
+                {urls.map((url) => (
+                  <Source key={url} href={url}>
+                    <SourceTrigger showFavicon label={new URL(url).hostname.replace(/^www\./, "")} />
+                    <SourceContent title={url} description="Stored page used for this answer" />
+                  </Source>
+                ))}
+              </div>
+            )
+          }
           return (
-            <p key={index} className="text-sm leading-6 whitespace-pre-wrap">
+            <MessageContent key={index} markdown id={`${messageId}-${index}`}>
               {part.text}
-            </p>
+            </MessageContent>
+          )
+        }
+
+        if (part.type === "attachments") {
+          return (
+            <div key={index} className="flex flex-wrap gap-2">
+              {part.items.map((item, itemIndex) => (
+                <div
+                  key={`${item.name}-${itemIndex}`}
+                  className="bg-secondary flex max-w-full items-center gap-2 rounded-2xl border px-2 py-1.5 text-sm"
+                >
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" className="size-10 rounded-lg object-cover" />
+                  ) : (
+                    <Paperclip className="text-muted-foreground size-4 shrink-0" />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block truncate">{item.name}</span>
+                    <span className="text-muted-foreground block text-xs">{formatBytes(item.size)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           )
         }
 
         if (part.type === "tool") {
           return (
-            <div
+            <Tool
               key={index}
-              className="flex items-start gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm"
-            >
-              {part.state === "running" ? (
-                <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin" />
-              ) : (
-                <Badge variant={part.state === "error" ? "destructive" : "secondary"}>
-                  {part.state === "error" ? "Failed" : "Done"}
-                </Badge>
-              )}
-              <div className="min-w-0">
-                <div className="font-medium">{part.name}</div>
-                <div className="text-muted-foreground whitespace-pre-wrap">{part.detail}</div>
-              </div>
-            </div>
+              defaultOpen={part.state !== "done"}
+              toolPart={{
+                type: part.name,
+                state: toolPartState(part.state),
+                input: { detail: part.detail },
+                errorText: part.state === "error" ? part.detail : undefined,
+              }}
+            />
           )
         }
 
         return (
           <div key={index} className="flex flex-col gap-3">
             {part.items.map((item) => (
-              <Card key={item.url} size="sm">
+              <Card key={item.url} size="sm" className={item.screenshotFile ? "pt-0" : undefined}>
                 {item.screenshotFile ? (
-                  <img
-                    src={screenshotSrc(item.screenshotFile)}
-                    alt={item.title || item.url}
-                    className="max-h-96 w-full object-cover object-top"
-                  />
+                  <button
+                    type="button"
+                    className="block w-full cursor-zoom-in text-left"
+                    onDoubleClick={() => onOpenScreenshot(item)}
+                  >
+                    <img
+                      src={screenshotSrc(item.screenshotFile)}
+                      alt={item.title || item.url}
+                      className="max-h-96 w-full rounded-t-xl object-cover object-top"
+                    />
+                    <span className="text-muted-foreground block px-4 pt-2 text-xs">
+                      Double-click to view the whole image, crop it, and parse that region.
+                    </span>
+                  </button>
                 ) : null}
                 <CardHeader>
                   <CardTitle>{item.title || "Untitled page"}</CardTitle>
@@ -132,8 +225,10 @@ function MessageParts({ parts }: { parts: MessagePart[] }) {
                       <CardContent className="text-muted-foreground">{item.excerpt}</CardContent>
                     ) : null}
                     {item.parsedMarkdown ? (
-                      <CardContent className="max-h-80 overflow-auto whitespace-pre-wrap text-sm">
-                        {item.parsedMarkdown}
+                      <CardContent className="max-h-80 overflow-auto">
+                        <Markdown id={`${messageId}-parsed-${item.url}`} className="prose prose-sm dark:prose-invert max-w-none">
+                          {item.parsedMarkdown}
+                        </Markdown>
                       </CardContent>
                     ) : null}
                   </>
@@ -154,7 +249,12 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1")
   const [services, setServices] = useState<ServiceSnapshot[]>(initialServiceSnapshots)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState<"chat" | "settings" | "images">("chat")
+  const [themeMode, setThemeMode] = useState<ThemeMode>(readThemeMode)
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([])
+  const [cropTarget, setCropTarget] = useState<StoredCrawl | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const active =
     conversations.find((conversation) => conversation.id === activeId) ?? conversations[0]
@@ -166,6 +266,15 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0")
   }, [collapsed])
+
+  useEffect(() => {
+    applyThemeMode(themeMode)
+    if (themeMode !== "system") return
+    const media = window.matchMedia("(prefers-color-scheme: dark)")
+    const onChange = () => applyThemeMode("system")
+    media.addEventListener("change", onChange)
+    return () => media.removeEventListener("change", onChange)
+  }, [themeMode])
 
   useEffect(() => {
     let cancelled = false
@@ -182,21 +291,81 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" })
-  }, [active.messages, busy])
-
   function updateConversation(id: string, recipe: (conversation: Conversation) => Conversation) {
     setConversations((current) => current.map((conversation) => (conversation.id === id ? recipe(conversation) : conversation)))
   }
 
+  function releaseAttachments(items: DraftAttachment[]) {
+    for (const item of items) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    }
+  }
+
+  function addDraftFiles(list: FileList | null) {
+    if (!list || list.length === 0) return
+    const next: DraftAttachment[] = []
+    for (const file of list) {
+      next.push({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: isImageFile(file) ? URL.createObjectURL(file) : undefined,
+      })
+    }
+    setAttachments((current) => [...current, ...next].slice(0, MAX_ATTACHMENTS))
+  }
+
+  function removeDraftFile(id: string) {
+    setAttachments((current) => {
+      const target = current.find((item) => item.id === id)
+      if (target) releaseAttachments([target])
+      return current.filter((item) => item.id !== id)
+    })
+  }
+
+  function historyFrom(messages: ChatMessage[]): ConversationTurn[] {
+    return messages.flatMap((message) => {
+      const typed = message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("\n")
+        .trim()
+      const attached = message.parts
+        .filter((part) => part.type === "attachments")
+        .flatMap((part) => part.items)
+      const files = attachmentContext(attached).slice(0, 6000)
+      const text = [typed, files].filter(Boolean).join("\n\n").trim()
+      if (!text) return []
+      return [{ role: message.role, text }]
+    })
+  }
+
   async function send(text: string) {
-    const instruction = text.trim()
-    if (!instruction || busy) return
+    const typed = text.trim()
+    if (busy || (!typed && attachments.length === 0)) return
+
+    const draftFiles = attachments
+    const stored = await Promise.all(draftFiles.map((item) => readStoredAttachment(item.file)))
+    releaseAttachments(draftFiles)
+    setAttachments([])
+    setDraft("")
 
     const conversationId = active.id
+    const history = historyFrom(active.messages)
     const assistantId = crypto.randomUUID()
-    const title = active.messages.length === 0 ? instruction.slice(0, 42) : active.title
+    const titleSource = typed || stored.map((item) => item.name).join(", ")
+    const title = active.messages.length === 0 ? titleSource.slice(0, 42) : active.title
+    const userParts: MessagePart[] = []
+    if (stored.length > 0) userParts.push({ type: "attachments", items: stored })
+    if (typed) userParts.push({ type: "text", text: typed })
+    const filesOnly = !typed && !hasReadableText(stored)
+    const assistantParts: MessagePart[] = filesOnly
+      ? [
+          {
+            type: "text",
+            text: "I added those files. I can read text files such as notes, markdown, CSV, and JSON. Ask a question about one of those.",
+          },
+        ]
+      : []
 
     updateConversation(conversationId, (conversation) => ({
       ...conversation,
@@ -204,26 +373,96 @@ export default function App() {
       updatedAt: Date.now(),
       messages: [
         ...conversation.messages,
-        { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: instruction }] },
-        { id: assistantId, role: "assistant", parts: [] },
+        { id: crypto.randomUUID(), role: "user", parts: userParts },
+        { id: assistantId, role: "assistant", parts: assistantParts },
       ],
     }))
-    setDraft("")
+
+    if (filesOnly) return
+
     setBusy(true)
 
     try {
-      await instructAgent(instruction, (parts) => {
-        updateConversation(conversationId, (conversation) => ({
-          ...conversation,
-          updatedAt: Date.now(),
-          messages: conversation.messages.map((message) =>
-            message.id === assistantId ? { ...message, parts } : message,
-          ),
-        }))
-      })
+      await instructAgent(
+        typed || "Answer using the attached files.",
+        (parts) => {
+          updateConversation(conversationId, (conversation) => ({
+            ...conversation,
+            updatedAt: Date.now(),
+            messages: conversation.messages.map((message) =>
+              message.id === assistantId ? { ...message, parts } : message,
+            ),
+          }))
+        },
+        history,
+        attachmentContext(stored),
+      )
     } finally {
       setBusy(false)
     }
+  }
+
+  async function parseCrop(target: StoredCrawl, crop: PixelCrop) {
+    if (busy) return
+    setView("chat")
+    const conversationId = active.id
+    const assistantId = crypto.randomUUID()
+    const rounded = {
+      x: Math.round(crop.x),
+      y: Math.round(crop.y),
+      width: Math.round(crop.width),
+      height: Math.round(crop.height),
+    }
+    const title = active.messages.length === 0 ? `Parse ${target.url}`.slice(0, 42) : active.title
+
+    updateConversation(conversationId, (conversation) => ({
+      ...conversation,
+      title,
+      updatedAt: Date.now(),
+      messages: [
+        ...conversation.messages,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              text: `Parse the selected region (${rounded.width} × ${rounded.height} px) of ${target.url}.`,
+            },
+          ],
+        },
+        { id: assistantId, role: "assistant", parts: [] },
+      ],
+    }))
+    setBusy(true)
+    try {
+      await parseStoredScreenshot(
+        (parts) => {
+          updateConversation(conversationId, (conversation) => ({
+            ...conversation,
+            updatedAt: Date.now(),
+            messages: conversation.messages.map((message) =>
+              message.id === assistantId ? { ...message, parts } : message,
+            ),
+          }))
+        },
+        { url: target.url || undefined, crop: rounded, screenshotFile: target.screenshotFile },
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function openGalleryImage(image: GalleryImage) {
+    setCropTarget({
+      url: image.url ?? "",
+      title: image.url ?? image.filename,
+      excerpt: "",
+      screenshotFile: image.filename,
+      parsedMarkdown: null,
+      error: null,
+      timestamp: image.visitedAt ?? new Date().toISOString(),
+    })
   }
 
   function startNewChat() {
@@ -231,6 +470,10 @@ export default function App() {
     setConversations((current) => [next, ...current])
     setActiveId(next.id)
     setDraft("")
+    setAttachments((current) => {
+      releaseAttachments(current)
+      return []
+    })
   }
 
   return (
@@ -255,7 +498,7 @@ export default function App() {
           {collapsed ? null : (
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">Spyber</div>
-              <div className="text-xs text-muted-foreground">MCP crawl agent</div>
+              <div className="text-xs text-muted-foreground">Answers from stored pages</div>
             </div>
           )}
           <Button type="button" size="icon" variant="outline" onClick={startNewChat} aria-label="New chat">
@@ -308,22 +551,74 @@ export default function App() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b px-6 py-3">
-          <div className="text-sm font-medium">Instruct Spyber</div>
-          <p className="text-xs text-muted-foreground">
-            Ask Spyber to crawl a page, then parse the screenshot if you want markdown.
-          </p>
+        <header className="flex items-center justify-between gap-3 border-b px-6 py-3">
+          {view === "chat" ? (
+            <div>
+              <div className="text-sm font-medium">Instruct Spyber</div>
+              <p className="text-xs text-muted-foreground">
+                Ask about pages already stored, or crawl and parse a new one.
+              </p>
+            </div>
+          ) : (
+            <Button type="button" variant="ghost" onClick={() => setView("chat")}>
+              <ArrowLeft />
+              Back to chat
+            </Button>
+          )}
+          {view === "chat" ? (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Images"
+                onClick={() => setView("images")}
+              >
+                <Images />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Settings"
+                onClick={() => setView("settings")}
+              >
+                <Settings />
+              </Button>
+            </div>
+          ) : null}
         </header>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-6">
+        {view === "settings" ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <SettingsPage
+              mode={themeMode}
+              onModeChange={(mode) => {
+                setThemeMode(mode)
+                saveThemeMode(mode)
+              }}
+            />
+          </div>
+        ) : null}
+        {view === "images" ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <ImagesPage
+              onOpen={openGalleryImage}
+              onDeleted={(filename) => {
+                setCropTarget((current) => (current?.screenshotFile === filename ? null : current))
+              }}
+            />
+          </div>
+        ) : null}
+        <ChatContainerRoot className={cn("relative min-h-0 flex-1", view !== "chat" && "hidden")}>
+          <ChatContainerContent className="mx-auto w-full max-w-3xl gap-6 px-6 py-6">
             {active.messages.length === 0 ? (
               <div className="flex flex-col gap-3 pt-16">
-                <h1 className="text-2xl font-medium tracking-tight">What should I open?</h1>
+                <h1 className="text-2xl font-medium tracking-tight">What do you want to know?</h1>
                 <p className="max-w-xl text-sm text-muted-foreground">
-                  Ask whether the web crawler or the database is running, or tell Spyber to start or stop
-                  either one. You can check for pending migrations and apply them, or send a URL
-                  and the screenshot comes back in this thread. Ask Spyber to parse it when you want markdown.
+                  Ask about pages that have been parsed. Spyber answers from those stored chunks and keeps
+                  the thread in mind. You can also crawl a URL, parse the screenshot, and check the crawler,
+                  the database, and the logs.
                 </p>
                 <div className="mt-4 flex flex-col items-start gap-2">
                   {SUGGESTIONS.map((suggestion) => (
@@ -342,63 +637,169 @@ export default function App() {
               </div>
             ) : (
               active.messages.map((message) => (
-                <div
+                <Message
                   key={message.id}
-                  className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
+                  className={message.role === "user" ? "flex-row-reverse" : undefined}
                 >
+                  {message.role === "assistant" ? (
+                    <MessageAvatar src="" alt="Spyber" fallback="S" />
+                  ) : null}
                   <div
-                    className={
-                      message.role === "user"
-                        ? "max-w-[85%] rounded-2xl bg-primary px-4 py-2 text-primary-foreground"
-                        : "w-full max-w-[85%]"
-                    }
+                    className={cn(
+                      "flex min-w-0 flex-col gap-2",
+                      message.role === "user" ? "max-w-[85%] items-end" : "max-w-[90%] flex-1",
+                    )}
                   >
-                    {message.role === "assistant" ? (
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">Spyber</div>
-                    ) : null}
                     {message.parts.length === 0 ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <LoaderCircle className="size-4 animate-spin" />
-                        Reading the instruction
-                      </div>
+                      <Loader variant="text-shimmer" text="Reading the instruction" />
                     ) : (
-                      <MessageParts parts={message.parts} />
+                      <MessageParts
+                        parts={message.parts}
+                        messageId={message.id}
+                        onOpenScreenshot={setCropTarget}
+                      />
                     )}
                   </div>
-                </div>
+                </Message>
               ))
             )}
-            <div ref={bottomRef} />
+            <ChatContainerScrollAnchor />
+          </ChatContainerContent>
+          <div className="absolute right-4 bottom-4">
+            <ScrollButton />
           </div>
-        </ScrollArea>
+        </ChatContainerRoot>
 
-        <form
-          className="border-t px-6 py-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void send(draft)
-          }}
-        >
-          <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
-            <Textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault()
-                  void send(draft)
-                }
-              }}
-              placeholder="Crawl https://example.com and show the screenshot"
-              rows={2}
-              disabled={busy}
-              className="min-h-16 resize-none"
-            />
-            <Button type="submit" size="icon" disabled={busy || draft.trim().length === 0} aria-label="Send">
-              {busy ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
-            </Button>
-          </div>
-        </form>
+        <div className={cn("border-t px-6 py-4", view !== "chat" && "hidden")}>
+          <PromptInput
+            className="mx-auto w-full max-w-3xl"
+            value={draft}
+            onValueChange={setDraft}
+            onSubmit={() => void send(draft)}
+            isLoading={busy}
+            disabled={busy}
+          >
+            {attachments.length > 0 ? (
+              <div className="flex flex-wrap gap-2 px-2 pt-1">
+                {attachments.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-muted flex max-w-full items-center gap-2 rounded-2xl border py-1 pr-1 pl-2 text-sm"
+                  >
+                    {item.previewUrl ? (
+                      <img src={item.previewUrl} alt="" className="size-8 rounded-lg object-cover" />
+                    ) : (
+                      <Paperclip className="text-muted-foreground size-4 shrink-0" />
+                    )}
+                    <span className="max-w-40 truncate">{item.file.name}</span>
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={`Remove ${item.file.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        removeDraftFile(item.id)
+                      }}
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <PromptInputTextarea placeholder="Ask about a stored page, or crawl https://example.com" />
+            <PromptInputActions className="justify-between px-2 pb-2">
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="rounded-full"
+                    aria-label="Add files"
+                    disabled={busy}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Plus />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="bg-popover text-popover-foreground z-50 min-w-44 rounded-xl border p-1 shadow-md"
+                  >
+                    <DropdownMenu.Item
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+                      onSelect={() => {
+                        window.setTimeout(() => imageInputRef.current?.click(), 0)
+                      }}
+                    >
+                      <ImageIcon className="size-4" />
+                      Add images
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-[highlighted]:bg-muted"
+                      onSelect={() => {
+                        window.setTimeout(() => fileInputRef.current?.click(), 0)
+                      }}
+                    >
+                      <Paperclip className="size-4" />
+                      Add files
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  addDraftFiles(event.target.files)
+                  event.target.value = ""
+                }}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  addDraftFiles(event.target.files)
+                  event.target.value = ""
+                }}
+              />
+              <PromptInputAction tooltip="Send">
+                <Button
+                  type="button"
+                  size="icon"
+                  disabled={busy || (draft.trim().length === 0 && attachments.length === 0)}
+                  aria-label="Send"
+                  onClick={() => void send(draft)}
+                >
+                  {busy ? <Loader variant="circular" size="sm" /> : <ArrowUp />}
+                </Button>
+              </PromptInputAction>
+            </PromptInputActions>
+          </PromptInput>
+        </div>
+        {cropTarget?.screenshotFile ? (
+          <ScreenshotCropDialog
+            src={screenshotSrc(cropTarget.screenshotFile)}
+            title={cropTarget.title || cropTarget.url}
+            open
+            onClose={() => setCropTarget(null)}
+            onParse={(crop: PixelCrop) => {
+              const target = cropTarget
+              setCropTarget(null)
+              void parseCrop(target, crop)
+            }}
+          />
+        ) : null}
       </main>
     </div>
   )
